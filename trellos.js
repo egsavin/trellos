@@ -237,6 +237,8 @@ Trellos.Export = function (props) {
             return m.format('YYYY-MM-DD');
         }
 
+        if (window.trellos_debug) console.log('Trellos', 'Export by filter', filter);
+
         trelloGetRecursive(`boards/${board.id}/cards`, {
             filter: filter.visibility ? "visible" : "all",
             fields: "id,name,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity",
@@ -245,8 +247,6 @@ Trellos.Export = function (props) {
             since: dateFilter(filter.since),
             before: dateFilter(filter.before, 1)
         }).then((data) => {
-            console.log('exporting', data);
-
             let csv = [[
                 'Card key',
                 'Card name',
@@ -265,7 +265,6 @@ Trellos.Export = function (props) {
                 'idList',
                 'idBoard'
             ]];
-            console.log(csv);
             data.map((card, iter) => {
                 if (filter.lists.length && !filter.lists.find(idList => idList == card.idList)) return;
                 const list = listOfCard(card);
@@ -297,7 +296,12 @@ Trellos.Export = function (props) {
     return e('div', null,
         e(Trellos.Export.Boards, { idBoard: get(board, 'id'), onChange: onSelectBoard }),
         Boolean(board) ? e('div', null,
-            e(Trellos.Back, { onClick: () => { setBoard(null); setExportData(null); } }, board.name),
+            e(Trellos.Back, { onClick: () => { setBoard(null); setExportData(null); } },
+                board.name,
+                e('a', { href: board.shortUrl, target: "_blank", className: 'ml-2  text-secondary' },
+                    e('small', { className: 'fab fa-trello' })
+                )
+            ),
             exportData ? null : e(Trellos.Export.Form, { board: board, onSubmit: onExport }),
             exportData ? e(Trellos.Export.Download, { board: board, data: exportData }) : null
         ) : null
@@ -385,7 +389,7 @@ Trellos.Export.Boards = function (props) {
                     return e(BS.Nav.Item, { key: board.id },
                         e(BS.Nav.Link, {
                             eventKey: board.id,
-                            className: (board.closed ? 'text-muted' : null) + ' pl-0 pt-0'
+                            className: (board.closed ? 'text-secondary' : null) + ' pl-0 pt-0'
                         }, board.name)
                     )
                 })
