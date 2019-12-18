@@ -170,7 +170,7 @@ Trellos.Auth.Form = function (props) {
     return e('div', {},
         e(BS.Alert, { variant: 'danger' }, 'Требуется вход в Trello'),
         e(BS.Button, { onClick: props.onAuth }, 'Войти'),
-        e('div', {className: 'mt-2'},
+        e('div', { className: 'mt-2' },
             e(Trellos.Muted, null, 'Разрешите всплывающие окна на странице')
         )
     )
@@ -331,10 +331,11 @@ Trellos.Export.Download = function (props) {
             (`${props.data.length - 1} ` + declOfNum(props.data.length - 1, ['карточка', 'карточки', 'карточек']))
         ),
         e('i', {
-            className: 'fas fa-file-download mr-3 text-muted', style: {
+            className: 'fas fa-file-download mr-1 text-muted', style: {
                 fontSize: '130%', verticalAlign: 'middle'
             }
         }),
+        e(Trellos.Muted, { as: 'strong', className: 'mr-3', style: { verticalAlign: 'middle' } }, 'CSV'),
         e(BS.Button, { variant: "outline-secondary", className: 'mr-3', id: "trellos-export-mac", onClick: onDownload },
             e('i', { className: 'fab fa-apple mr-1' }), "Mac"),
         e(BS.Button, { variant: "outline-secondary", onClick: onDownload, id: "trellos-export-win" },
