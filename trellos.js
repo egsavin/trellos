@@ -170,7 +170,9 @@ Trellos.Auth.Form = function (props) {
     return e('div', {},
         e(BS.Alert, { variant: 'danger' }, 'Требуется вход в Trello'),
         e(BS.Button, { onClick: props.onAuth }, 'Войти'),
-        e(Trellos.Muted, null, 'Разрешите всплывающие окна на странице')
+        e('div', {className: 'mt-2'},
+            e(Trellos.Muted, null, 'Разрешите всплывающие окна на странице')
+        )
     )
 }
 
