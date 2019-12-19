@@ -95,7 +95,7 @@ const declOfNum = (number, titles) => {
 const Trellos = function (props) {
     const [validAuth, setValidAuth] = React.useState(false);
     const [me, setMe] = React.useState(null);
-    const [tab, setTab] = React.useState('export');
+    const [tab, setTab] = React.useState('search');
 
     const authorize = function () {
         window.Trello.authorize({
@@ -138,6 +138,7 @@ const Trellos = function (props) {
     return e(BS.Container, { className: 'my-3' },
         validAuth ? null : e(Trellos.Auth.Form, { onAuth: authorize }),
         me ? e(Trellos.Nav, { activeKey: tab, onChangeTab: onChangeTab }) : null,
+        me && tab == 'search' ? e(Trellos.Search, { me: me }) : null,
         me && tab == 'settings' ? e(Trellos.Settings, { me: me }) : null,
         me && tab == 'export' ? e(Trellos.Export, { me: me }) : null
     );
@@ -183,6 +184,10 @@ Trellos.Nav = function (props) {
     }
 
     return e(BS.Nav, { onSelect: onSelect, activeKey: props.activeKey, className: 'mb-4', variant: 'tabs' },
+        e(BS.NavItem, {}, e(BS.Nav.Link, { eventKey: 'search' },
+            e('i', { className: 'fas fa-search d-inline-block d-sm-none mx-2' }),
+            e('span', { className: 'd-none d-sm-inline-block' }, 'Поиск')
+        )),
         e(BS.NavItem, {}, e(BS.Nav.Link, { eventKey: 'export' },
             e('i', { className: 'fas fa-file-download d-inline-block d-sm-none mx-2' }),
             e('span', { className: 'd-none d-sm-inline-block' }, 'Экспорт')
@@ -346,9 +351,9 @@ Trellos.Export.Download = function (props) {
             }
         }),
         e(Trellos.Muted, { as: 'strong', className: 'mr-3', style: { verticalAlign: 'middle' } }, 'CSV'),
-        e(BS.Button, { variant: "outline-secondary", className: 'mr-3', id: "trellos-export-mac", onClick: onDownload },
+        e(BS.Button, { variant: "outline-primary", className: 'mr-3', id: "trellos-export-mac", onClick: onDownload },
             e('i', { className: 'fab fa-apple mr-1' }), "Mac"),
-        e(BS.Button, { variant: "outline-secondary", onClick: onDownload, id: "trellos-export-win" },
+        e(BS.Button, { variant: "outline-primary", onClick: onDownload, id: "trellos-export-win" },
             e('i', { className: 'fab fa-windows mr-1' }), "Windows"),
     )
 }
@@ -449,8 +454,7 @@ Trellos.Export.Form = function (props) {
         e(Trellos.Export.Form.Lists, { board: props.board, onlyVisible: visibility }),
         e(Trellos.Export.Form.Period, { onChange: onChangePeriod }),
         e(BS.Button, {
-            type: 'submit', variant: 'secondary',
-            disabled: (period && !period.valid) || view == 'progress'
+            type: 'submit', disabled: (period && !period.valid) || view == 'progress'
         },
             view == 'progress' ? e(Trellos.Spinner, { className: 'mr-2' }) : null,
             'Экспорт в CSV')
@@ -530,4 +534,122 @@ Trellos.Export.Form.Period = function (props) {
     )
 }
 
-Trellos.Form = function () { }
+
+Trellos.Search = function (props) {
+    const [searchProgress, setSearchProgress] = React.useState(false);
+
+    const onSearch = (filter) => {
+        if (searchProgress) return;
+        console.log('filter', filter);
+        setSearchProgress(true);
+    }
+
+    return e('div', null,
+        e(Trellos.Search.Form, { onSubmit: onSearch, inProgress: searchProgress })
+    );
+}
+
+Trellos.Search.Form = function (props) {
+    const [boards, setBoards] = React.useState(null);
+    const [allBoards, setAllBoards] = React.useState(true);
+    const [queryValid, setQueryValid] = React.useState(true);
+    const [formValid, setFormValid] = React.useState(false);
+
+    React.useEffect(() => {
+        if (boards !== null) return;
+
+        window.Trello.get('member/me/boards',
+            {
+                fields: 'id,name,shortUrl,closed',
+                organization: false,
+                labels: 'none',
+                memberships: 'none',
+                organization_fields: 'none',
+                members: "none"
+            }, (data) => {
+                setBoards(data.sort((a, b) => {
+                    let alpha = [a.name, b.name].sort();
+                    let closed = 0;
+                    if (a.closed && !b.closed) closed = 1;
+                    if (!a.closed && b.closed) closed = -1;
+                    return closed === 0 ? alpha : closed;
+                }))
+            });
+    });
+
+    const onSelectBoard = (event) => {
+        const cb = event.target.closest('input[type="checkbox"]');
+        if (!cb) return;
+        if (cb.value == 'all') {
+            setAllBoards(cb.checked);
+        }
+    }
+
+    const validateQuery = (event) => {
+        const val = event.target.value.trim();
+        setQueryValid(val.length == 0 || val.length > 1);
+        validateForm();
+    }
+
+    const validateForm = () => {
+        const query = get(document.getElementById('trellos-search-query'), 'value', '').trim();
+        setFormValid(query.length > 1);
+    }
+
+    const onSubmit = (event) => {
+        event.preventDefault();
+        if (!formValid) return false;
+        props.onSubmit({
+            query: document.getElementById('trellos-search-query').value.trim(),
+            allWords: document.getElementById('trellos-search-all-words').checked,
+            allowArchive: document.getElementById('trellos-search-archive').checked,
+            sortMode: document.getElementById('trellos-search-sort-alt').checked ? 'created' : 'modified',
+            allBoards: document.getElementById('trellos-search-all-boards').checked,
+            boards: Array.from(document.querySelectorAll('#trellos-search-form input[name="trellos-search-board"]:checked'))
+                .map(x => x.value)
+        })
+    }
+
+    return e(BS.Form, { onSubmit: onSubmit, id: 'trellos-search-form' },
+        e(BS.Form.Group, null,
+            e(BS.Form.Control, {
+                type: 'text', placeholder: 'Что ищем?', size: 'lg', id: 'trellos-search-query',
+                onChange: validateQuery, isInvalid: !queryValid
+            }),
+        ),
+        e(BS.Form.Group, null,
+            e(BS.Form.Check, {
+                inline: true, type: 'checkbox', label: 'Все слова',
+                defaultChecked: true, id: 'trellos-search-all-words'
+            }),
+            e(BS.Form.Check, {
+                inline: true, type: 'checkbox', label: 'Искать в архиве',
+                id: 'trellos-search-archive'
+            }),
+            e(BS.Form.Check, {
+                inline: true, type: 'checkbox', label: 'Сортировка по созданию',
+                id: 'trellos-search-sort-alt'
+            })
+        ),
+        e(BS.Form.Group, null,
+            boards == null ? e(Trellos.Spinner) : e('div', null,
+                e(BS.Form.Check, {
+                    inline: true, style: { fontWeight: 'bold' }, defaultChecked: true,
+                    id: 'trellos-search-all-boards', value: 'all', label: 'Все доски',
+                    onClick: onSelectBoard
+                }),
+                allBoards ? null : boards.map(board => {
+                    return e(BS.Form.Check, {
+                        inline: true, type: 'checkbox', label: board.name, name: 'trellos-search-board',
+                        id: `trellos-search-board-${board.id}`, value: board.id, key: board.id
+                    })
+                })
+            )
+        ),
+        e(BS.Button, { disabled: !formValid || props.inProgress, type: 'submit' },
+            props.inProgress ? e(Trellos.Spinner, { className: 'mr-2' }) : null,
+            props.inProgress ? 'Поиск…' : 'Найти'
+        )
+    );
+}
+
