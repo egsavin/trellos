@@ -183,8 +183,14 @@ Trellos.Nav = function (props) {
     }
 
     return e(BS.Nav, { onSelect: onSelect, activeKey: props.activeKey, className: 'mb-4', variant: 'tabs' },
-        e(BS.NavItem, {}, e(BS.Nav.Link, { eventKey: 'export' }, 'Экспорт')),
-        e(BS.Nav.Item, {}, e(BS.Nav.Link, { eventKey: 'settings' }, 'Настройки')),
+        e(BS.NavItem, {}, e(BS.Nav.Link, { eventKey: 'export' },
+            e('i', { className: 'fas fa-file-download d-inline-block d-sm-none mx-2' }),
+            e('span', { className: 'd-none d-sm-inline-block' }, 'Экспорт')
+        )),
+        e(BS.Nav.Item, {}, e(BS.Nav.Link, { eventKey: 'settings' },
+            e('i', { className: 'fas fa-cog d-inline-block d-sm-none mx-2' }),
+            e('span', { className: 'd-none d-sm-inline-block' }, 'Настройки')
+        )),
     );
 }
 
