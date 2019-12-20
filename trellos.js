@@ -12,12 +12,6 @@ const get = function (props, name, def) {
     return props[name];
 }
 
-// declOfNum(number, ['задача', 'задачи', 'задач']));
-const declOfNum = (number, titles) => {
-    const cases = [2, 0, 1, 1, 1, 2];
-    return titles[(number % 100 > 4 && number % 100 < 20) ? 2 : cases[(number % 10 < 5) ? number % 10 : 5]];
-}
-
 const Trellos = function (props) {
     const [validAuth, setValidAuth] = React.useState(false);
     const [me, setMe] = React.useState(null);
@@ -70,10 +64,34 @@ const Trellos = function (props) {
     );
 }
 
+Trellos.rndstr = () => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
 
 Trellos.preferences = {
-    minTextLengthToStem: 4,
-    minQueryLength: 1
+    minWordLengthToStem: 4,
+    minQueryLength: 2,
+    searchCacheTtl: 1000 * 60,
+    searchPageSize: 30
+}
+
+// declOfNum(number, ['задача', 'задачи', 'задач']));
+Trellos.declOfNum = (number, titles) => {
+    const cases = [2, 0, 1, 1, 1, 2];
+    return titles[(number % 100 > 4 && number % 100 < 20) ? 2 : cases[(number % 10 < 5) ? number % 10 : 5]];
+}
+
+Trellos.unionArrays = (arr1, arr2) => {
+    let arr3 = arr1.concat(arr2);
+    let arr4 = arr3.filter(function (item, pos) {
+        return arr3.indexOf(item) == pos;
+    })
+    return arr4;
+}
+
+// https://help.trello.com/article/759-getting-the-time-a-card-or-board-was-created
+Trellos.convertTrelloIdToTime = function (id) {
+    return moment(1000 * parseInt(id.substring(0, 8), 16));
 }
 
 
@@ -97,14 +115,11 @@ Trellos.trelloGetRecursive = async function (path, parameters, chunkCallback) {
                 chunkIndex++;
                 await recursiveLoad(minId); // load next chunk
             }
-        } else { // empty return from trello, it mean than all data loaded
-            // returns allData but last loading other parameters
+        } else {
+            // empty return from trello, it mean than all data loaded
         }
     }
 
-    // returns most oldest trello object id
-    // objects from trello may be unsorted because it compare all items
-    // id of trello object is mongoDB-ID. it can be compared
     const earliestId = function (list) {
         if (!list || !list.length) return "";
         let min = list[0].id;
@@ -165,6 +180,9 @@ Trellos.loadMeBoards = async function (filter) {
     Object.assign(opts, filter);
     return await window.Trello.get('member/me/boards', opts);
 }
+
+
+Trellos.searchCache = new Cache({ storage: new ObjectStorage() });
 
 
 Trellos.Back = function (props) {
@@ -310,8 +328,7 @@ Trellos.Export = function (props) {
             data.map((card, iter) => {
                 if (filter.lists.length && !filter.lists.find(idList => idList == card.idList)) return;
                 const list = listOfCard(card);
-                const created = moment(1000 * parseInt(card.id.substring(0, 8), 16));
-                // https://help.trello.com/article/759-getting-the-time-a-card-or-board-was-created
+                const created = Trellos.convertTrelloIdToTime(card.id)
                 csv.push([
                     card.shortLink,
                     card.name,
@@ -374,7 +391,7 @@ Trellos.Export.Download = function (props) {
 
     return e('div', null,
         e('div', { className: 'mb-3' },
-            (`${props.data.length - 1} ` + declOfNum(props.data.length - 1, ['карточка', 'карточки', 'карточек']))
+            (`${props.data.length - 1} ` + Trellos.declOfNum(props.data.length - 1, ['карточка', 'карточки', 'карточек']))
         ),
         e('i', {
             className: 'fas fa-file-download mr-1 text-muted', style: {
@@ -558,30 +575,8 @@ Trellos.Export.Form.Period = function (props) {
 
 Trellos.Search = function (props) {
     const [searchProgress, setSearchProgress] = React.useState(false);
-
-    const onSearch = (filter) => {
-        if (searchProgress) return;
-        console.log('Search. filter:', filter);
-        setSearchProgress(true);
-
-        /*
-        loading boards
-        search
-        results
-        */
-    }
-
-    return e('div', null,
-        e(Trellos.Search.Form, { onSubmit: onSearch, inProgress: searchProgress })
-    );
-}
-
-Trellos.Search.Form = function (props) {
     const [boards, setBoards] = React.useState(null);
-    const [allBoards, setAllBoards] = React.useState(true);
-    const [queryValid, setQueryValid] = React.useState(true);
-    const [invalidMsg, setInvalidMsg] = React.useState('');
-    const [formValid, setFormValid] = React.useState(false);
+    const [searchResult, setSearchResult] = React.useState(null);
 
     React.useEffect(() => {
         if (boards !== null) return;
@@ -597,31 +592,226 @@ Trellos.Search.Form = function (props) {
         })
     })
 
+    // finds stemmed words in stemmed text and returns finded
+    const findText = (stemQuery, stemText) => {
+        let result = [];
+        if (!stemQuery || !stemText) return null; // error parameters
+        stemQuery.forEach((wordQuery) => {
+            let ok = stemText.find(wordText => wordText == wordQuery);
+            if (ok) result.push(wordQuery);
+        });
+        return result;
+    }
+
+    const cardCreatedComparer = (a, b) => {
+        if (!a || !b) return 0;
+        if (a.id > b.id) return -1;
+        if (a.id < b.id) return 1;
+        return 0;
+    }
+
+    const cardLastActivityComparer = (a, b) => {
+        if (!a || !b) return 0;
+        let da = new Date(a.dateLastActivity);
+        let db = new Date(b.dateLastActivity);
+        if (da > db) return -1;
+        if (da < db) return 1;
+        return 0;
+    }
+
+    const onSearch = async (filter) => {
+        if (searchProgress) return;
+        setSearchProgress(true);
+        setSearchResult(null);
+
+        filter.stemQuery = Porter.stemText(filter.query, Trellos.preferences.minWordLengthToStem);
+        if (filter.allBoards) filter.boards = boards.map(b => b.id);
+
+        let cardsData = [];
+        for (let i = 0; i < filter.boards.length; i++) {
+            let idBoard = filter.boards[i];
+            let cards = Trellos.searchCache.getItem(idBoard);
+            if (cards == null) {
+                cards = await Trellos.trelloGetRecursive(`boards/${idBoard}/cards`, {
+                    filter: "all",
+                    fields: "id,name,desc,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity",
+                    members: "true",
+                    members_fields: "id,fullName,username"
+                })
+                Trellos.searchCache.setItem(idBoard, cards, Trellos.preferences.searchCacheTtl)
+            }
+            cardsData.push(cards);
+        };
+
+        let searchResult = [];
+
+        cardsData.forEach(async (cards) => {
+            cards.forEach(card => {
+                if (!filter.allowArchive && card.closed) return;
+                card.stemName = Porter.stemText(card.name, Trellos.preferences.minWordLengthToStem);
+                card.stemDesc = Porter.stemText(card.desc, Trellos.preferences.minWordLengthToStem);
+                // search by card name
+                let findedWords = findText(filter.stemQuery, card.stemName) || [];
+                let isOk = filter.allWords ? findedWords.length == filter.stemQuery.length : findedWords.length > 0;
+                // search by card desc if it needed
+                if (!isOk) {
+                    findedWords = Trellos.unionArrays(findedWords, findText(filter.stemQuery, card.stemDesc) || []);
+                    isOk = filter.allWords ? findedWords.length == filter.stemQuery.length : findedWords.length > 0;
+                }
+                if (!isOk) return;
+                card.board = boards.find(b => b.id == card.idBoard);
+                card.list = card.board.lists.find(l => l.id == card.idList);
+                card.finded = findedWords;
+                searchResult.push(card);
+            })
+        })
+
+        searchResult.sort(filter.sortMode == 'created' ? cardCreatedComparer : cardLastActivityComparer);
+        searchResult.hash = btoa(encodeURIComponent(Trellos.rndstr()));
+        setSearchResult(searchResult);
+        setSearchProgress(false);
+    }
+
+    return boards == null ? e(Trellos.Spinner) :
+        e('div', null,
+            e(Trellos.Search.Form, { boards: boards, onSubmit: onSearch, inProgress: searchProgress }),
+            !searchProgress && searchResult ? e(Trellos.Search.Result, { data: searchResult }) : null
+        );
+}
+
+Trellos.Search.Result = function (props) {
+    const [page, setPage] = React.useState(0);
+    const [hash, setHash] = React.useState(null);
+
+    const onChangePage = (pageIndex) => {
+        if (pageIndex == page) return;
+        setPage(pageIndex);
+        document.getElementById('trellos-search-result')
+            .scrollIntoView({ block: "start", behavior: "smooth", inline: "nearest" });
+    }
+
+    React.useEffect(() => {
+        if (hash != props.data.hash) {
+            setPage(0)
+            setHash(props.data.hash)
+        }
+    });
+
+    const dataPage = props.data.slice(page * Trellos.preferences.searchPageSize, (page + 1) * Trellos.preferences.searchPageSize)
+    let pageCount = Math.ceil(props.data.length / Trellos.preferences.searchPageSize);
+    let pages = [];
+    for (let i = 0; i < pageCount; i++) {
+        pages.push(e(BS.Pagination.Item, { key: i, active: i == page, onClick: () => { onChangePage(i) } }, `${i + 1}`));
+        if (i == 9) {
+            pages.push(e(BS.Pagination.Ellipsis, { key: '...' }))
+            break;
+        }
+    }
+
+    return e('div', { className: 'mt-4', id: 'trellos-search-result' },
+        e(Trellos.Search.Result.Head, { data: props.data }),
+        dataPage.map((card, i) => e(Trellos.Search.Result.Card, {
+            key: card.id,
+            card: card,
+            index: page * Trellos.preferences.searchPageSize + i
+        })),
+        e(BS.Pagination, null,
+            pages.length > 1 ? pages : null
+        ),
+        pageCount > 10 ? e(Trellos.Muted, null, 'Показаны первые 10 страниц') : null
+    );
+}
+
+Trellos.Search.Result.Card = function (props) {
+    const toggleDescr = (event) => {
+        const link = event.target.closest('a');
+        if (!link) return;
+        const idCard = link.getAttribute('card');
+        if (!idCard) return;
+        event.preventDefault();
+        const cardDesc = document.querySelector(`.trellos-card-desc[card="${idCard}"]`);
+        if (!cardDesc) return;
+        if (cardDesc.getAttribute('opened')) {
+            cardDesc.removeAttribute('opened');
+            cardDesc.style.maxHeight = "10rem";
+            link.innerHTML = "Развернуть";
+        } else {
+            cardDesc.setAttribute('opened', "true");
+            cardDesc.style.maxHeight = null;
+            link.innerHTML = "Свернуть"
+        }
+        document.querySelector(`.trellos-card[card="${idCard}"]`)
+            .scrollIntoView({ block: "start", behavior: "smooth", inline: "nearest" });
+    }
+
+    return e(BS.Card, { className: 'mb-5 trellos-card', card: props.card.id }, e(BS.Card.Body, null,
+        e(BS.Card.Text, { className: 'text-secondary' },
+            e('small', null,
+                e('b', { className: 'mr-3' }, props.index + 1),
+                e('span', { className: 'mr-3' }, `${props.card.board.name} / ${props.card.list.name}`),
+                props.card.labels.map(label => {
+                    return e(Trellos.TrelloLabel, { key: label.id + Trellos.rndstr(), variant: label.color, className: 'mr-1' }, label.name)
+                })
+            )
+        ),
+        e(BS.Card.Subtitle, null,
+            e(Trellos.Search.MarkedText, { words: props.card.finded }, props.card.name),
+            e('a', { className: 'text-secondary ml-3 fab fa-trello', target: '_blank', href: props.card.shortUrl })
+        ),
+        e(BS.Card.Text, { className: 'text-secondary mt-2', style: { fontSize: "0.8rem" } },
+            e('span', { className: 'mb-1 trellos-card-desc d-block', card: props.card.id, style: { overflow: 'hidden', maxHeight: "10rem" } },
+                e(Trellos.Search.MarkedText, { words: props.card.finded, replaceNewline: true }, props.card.desc)
+            ),
+            e(Trellos.Muted, { className: 'mr-2' }, props.index + 1),
+            e('a', { href: "#", card: props.card.id, onClick: toggleDescr }, 'Развернуть'),
+        )
+    ))
+}
+
+Trellos.Search.Result.Head = function (props) {
+    if (!props.data.length) return e(BS.Alert, { variant: 'secondary' }, 'Ничего не найдено')
+    return e(Trellos.Muted, { className: 'mb-4 d-block' },
+        `Найдено ${props.data.length} `,
+        Trellos.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
+    )
+}
+
+Trellos.Search.Form = function (props) {
+    const [allBoards, setAllBoards] = React.useState(false);
+    const [validQuery, setValidQuery] = React.useState(true);
+    const [validForm, setValidForm] = React.useState(false);
+
     const onSelectBoard = (event) => {
         const cb = event.target.closest('input[type="checkbox"]');
         if (!cb) return;
         if (cb.value == 'all') {
             setAllBoards(cb.checked);
         }
+        validateForm();
     }
 
     const validateQuery = (event) => {
         const val = event.target.value.trim();
-        let valid = val.length == 0 ||
-            (val.length > Trellos.preferences.minQueryLength &&
-                Porter.stemText(val, Trellos.preferences.minTextLengthToStem).length > 0);
-        setQueryValid(valid)
+        let valid = val.length >= Trellos.preferences.minQueryLength;
+        valid = valid && Porter.stemText(val, Trellos.preferences.minWordLengthToStem).length > 0;
+        setValidQuery(valid);
         validateForm();
     }
 
     const validateForm = () => {
-        const query = get(document.getElementById('trellos-search-query'), 'value', '').trim();
-        setFormValid(query.length > 1);
+        let query = document.getElementById('trellos-search-query').value.trim();
+        let validQ = query.length >= Trellos.preferences.minQueryLength;
+        validQ = validQ && Porter.stemText(query, Trellos.preferences.minWordLengthToStem).length > 0;
+        setValidQuery(validQ);
+
+        let isAllBoards = document.getElementById('trellos-search-all-boards').checked;
+        let hasCheckedBoards = document.querySelectorAll('#trellos-search-form input[name="trellos-search-board"]:checked').length > 0;
+        setValidForm(validQ && (isAllBoards || hasCheckedBoards));
     }
 
     const onSubmit = (event) => {
         event.preventDefault();
-        if (!formValid) return false;
+        if (!validForm || !validQuery) return false;
         props.onSubmit({
             query: document.getElementById('trellos-search-query').value.trim(),
             allWords: document.getElementById('trellos-search-all-words').checked,
@@ -637,7 +827,7 @@ Trellos.Search.Form = function (props) {
         e(BS.Form.Group, null,
             e(BS.Form.Control, {
                 type: 'text', placeholder: 'Что ищем?', size: 'lg', id: 'trellos-search-query',
-                onChange: validateQuery, isInvalid: !queryValid
+                onChange: validateQuery, isInvalid: !validQuery
             })
         ),
         e(BS.Form.Group, null,
@@ -655,24 +845,63 @@ Trellos.Search.Form = function (props) {
             })
         ),
         e(BS.Form.Group, null,
-            boards == null ? e(Trellos.Spinner) : e('div', null,
-                e(BS.Form.Check, {
-                    inline: true, style: { fontWeight: 'bold' }, defaultChecked: true,
-                    id: 'trellos-search-all-boards', value: 'all', label: 'Все доски',
-                    onClick: onSelectBoard
-                }),
-                allBoards ? null : boards.map(board => {
-                    return e(BS.Form.Check, {
-                        inline: true, type: 'checkbox', label: board.name, name: 'trellos-search-board',
-                        id: `trellos-search-board-${board.id}`, value: board.id, key: board.id
-                    })
+            e(BS.Form.Check, {
+                inline: true, style: { fontWeight: 'bold' }, defaultChecked: false,
+                id: 'trellos-search-all-boards', value: 'all', label: 'Все доски',
+                onChange: onSelectBoard
+            }),
+            allBoards ? null : props.boards.map(board => {
+                return e(BS.Form.Check, {
+                    inline: true, type: 'checkbox', label: board.name, name: 'trellos-search-board',
+                    id: `trellos-search-board-${board.id}`, value: board.id, key: board.id,
+                    onChange: onSelectBoard
                 })
-            )
+            })
         ),
-        e(BS.Button, { disabled: !formValid || props.inProgress || !boards, type: 'submit', size: 'lg', className: 'mt-3' },
+        e(BS.Button, {
+            disabled: !validForm || props.inProgress,
+            type: 'submit', size: 'lg', className: 'mt-3 px-4'
+        },
             props.inProgress ? e(Trellos.Spinner, { className: 'mr-2' }) : null,
             props.inProgress ? 'Поиск…' : 'Найти'
         )
     );
 }
 
+Trellos.TrelloLabel = (props) => {
+    const styles = {
+        green: { backgroundColor: '#61bd4f66', color: '#666' },
+        yellow: { backgroundColor: '#f2d60066', color: '#666' },
+        orange: { backgroundColor: '#ff9f1a66', color: '#666' },
+        red: { backgroundColor: '#eb5a4666', color: '#666' },
+        purple: { backgroundColor: '#c366e066', color: '#666' },
+        blue: { backgroundColor: '#0079bf66', color: '#666' },
+        sky: { backgroundColor: '#00c2e066', color: '#666' },
+        lime: { backgroundColor: '#51e89866', color: '#666' },
+        pink: { backgroundColor: '#ff78cb66', color: '#666' },
+        black: { backgroundColor: '#35526366', color: '#666' },
+        none: { border: '1px solid #b3bec488', color: 'gray' }
+    }
+
+    let opts = {};
+    Object.assign(opts, props);
+    opts.style = get(styles, props.variant, styles.none);
+    opts.style.borderRadius = "10px";
+    opts.style.fontSize = '0.6rem';
+    opts.className = 'd-inline-block px-2 ' + (opts.className || '');
+    delete opts.variant;
+    return e('span', opts, props.children);
+}
+
+
+Trellos.Search.MarkedText = (props) => {
+    let words = props.words || [];
+    let regstr = "([a-zA-Zа-яА-ЯёЁ]*(" +
+        words.join("|")
+        + ")[a-zA-Zа-яА-ЯёЁ]*)";
+    const r = new RegExp(regstr, "gmi");
+    let html = props.children;
+    if (props.replaceNewline) html = html.replace(/\n/gm, '<br>');
+    html = html.replace(r, '<mark>$1</mark>')
+    return e('span', { dangerouslySetInnerHTML: { __html: html } });
+}
