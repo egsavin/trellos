@@ -12,80 +12,6 @@ const get = function (props, name, def) {
     return props[name];
 }
 
-const trelloGetRecursive = async function (path, parameters, chunkCallback) {
-    let allData = []; // Container for all objects
-    let chunkIndex = 0;
-
-    // Loading function
-    let recursiveLoad = async function (before) {
-        // Trello returns only 1000 newest items.
-        // 'Before' is need to filter earlier chunk.
-        parameters['before'] = before;
-        parameters['limit'] = 1000; // max limit of trello
-        let data = await window.Trello.get(path, parameters);
-        if (data.length > 0) { // if it is non empty chunk
-            allData = allData.concat(data);
-            // find id for 'before' parameter
-            let minId = data.map(x => x.id).reduce((p, n) => n < p ? n : p);
-            if (minId) {
-                if (chunkCallback) chunkCallback(chunkIndex, data, allData.length);
-                chunkIndex++;
-                await recursiveLoad(minId); // load next chunk
-            }
-        } else { // empty return from trello, it mean than all data loaded
-            // returns allData but last loading other parameters
-        }
-    }
-
-    // returns most oldest trello object id
-    // objects from trello may be unsorted because it compare all items
-    // id of trello object is mongoDB-ID. it can be compared
-    const earliestId = function (list) {
-        if (!list || !list.length) return "";
-        let min = list[0].id;
-        for (let i = 0; i < list.length; i++) {
-            if (list[i].id < min) min = list[i].id;
-        }
-        return min;
-    }
-    // ---------------
-
-    await recursiveLoad(parameters.before || ""); // start loading
-    return allData;
-}
-
-// https://github.com/jimmywarting/StreamSaver.js
-const downloadAsFile = function (filename, text) {
-    const blob = new Blob(Array.from(text))
-    const fileStream = streamSaver.createWriteStream(filename, {
-        size: blob.size // Makes the procentage visiable in the download
-    })
-
-    // One quick alternetive way if you don't want the hole blob.js thing:
-    // const readableStream = new Response(
-    //   Blob || String || ArrayBuffer || ArrayBufferView
-    // ).body
-    const readableStream = blob.stream()
-
-    // more optimized pipe version
-    // (Safari may have pipeTo but it's useless without the WritableStream)
-    if (window.WritableStream && readableStream.pipeTo) {
-        return readableStream.pipeTo(fileStream)
-            .then(() => console.log('done writing file ' + filename))
-    }
-
-    // Write (pipe) manually
-    window.writer = fileStream.getWriter()
-
-    const reader = readableStream.getReader()
-    const pump = () => reader.read()
-        .then(res => res.done
-            ? writer.close()
-            : writer.write(res.value).then(pump))
-
-    pump()
-}
-
 // declOfNum(number, ['задача', 'задачи', 'задач']));
 const declOfNum = (number, titles) => {
     const cases = [2, 0, 1, 1, 1, 2];
@@ -142,6 +68,102 @@ const Trellos = function (props) {
         me && tab == 'settings' ? e(Trellos.Settings, { me: me }) : null,
         me && tab == 'export' ? e(Trellos.Export, { me: me }) : null
     );
+}
+
+
+Trellos.preferences = {
+    minTextLengthToStem: 4,
+    minQueryLength: 1
+}
+
+
+Trellos.trelloGetRecursive = async function (path, parameters, chunkCallback) {
+    let allData = []; // Container for all objects
+    let chunkIndex = 0;
+
+    // Loading function
+    let recursiveLoad = async function (before) {
+        // Trello returns only 1000 newest items.
+        // 'Before' is need to filter earlier chunk.
+        parameters['before'] = before;
+        parameters['limit'] = 1000; // max limit of trello
+        let data = await window.Trello.get(path, parameters);
+        if (data.length > 0) { // if it is non empty chunk
+            allData = allData.concat(data);
+            // find id for 'before' parameter
+            let minId = data.map(x => x.id).reduce((p, n) => n < p ? n : p);
+            if (minId) {
+                if (chunkCallback) chunkCallback(chunkIndex, data, allData.length);
+                chunkIndex++;
+                await recursiveLoad(minId); // load next chunk
+            }
+        } else { // empty return from trello, it mean than all data loaded
+            // returns allData but last loading other parameters
+        }
+    }
+
+    // returns most oldest trello object id
+    // objects from trello may be unsorted because it compare all items
+    // id of trello object is mongoDB-ID. it can be compared
+    const earliestId = function (list) {
+        if (!list || !list.length) return "";
+        let min = list[0].id;
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].id < min) min = list[i].id;
+        }
+        return min;
+    }
+    // ---------------
+
+    await recursiveLoad(parameters.before || ""); // start loading
+    return allData;
+}
+
+// https://github.com/jimmywarting/StreamSaver.js
+Trellos.downloadAsFile = function (filename, text) {
+    const blob = new Blob(Array.from(text))
+    const fileStream = streamSaver.createWriteStream(filename, {
+        size: blob.size // Makes the procentage visiable in the download
+    })
+
+    // One quick alternetive way if you don't want the hole blob.js thing:
+    // const readableStream = new Response(
+    //   Blob || String || ArrayBuffer || ArrayBufferView
+    // ).body
+    const readableStream = blob.stream()
+
+    // more optimized pipe version
+    // (Safari may have pipeTo but it's useless without the WritableStream)
+    if (window.WritableStream && readableStream.pipeTo) {
+        return readableStream.pipeTo(fileStream)
+            .then(() => console.log('done writing file ' + filename))
+    }
+
+    // Write (pipe) manually
+    window.writer = fileStream.getWriter()
+
+    const reader = readableStream.getReader()
+    const pump = () => reader.read()
+        .then(res => res.done
+            ? writer.close()
+            : writer.write(res.value).then(pump))
+
+    pump()
+}
+
+Trellos.loadMeBoards = async function (filter) {
+    let opts = {
+        fields: 'id,name,shortUrl,closed',
+        organization: false,
+        lists: 'all',
+        filter: 'all',
+        labels: 'none',
+        memberships: 'none',
+        organization_fields: 'none',
+        members: "none"
+    };
+    Object.assign(opts, filter);
+    return await window.Trello.get('member/me/boards', opts);
 }
 
 
@@ -208,7 +230,16 @@ Trellos.Spinner = function (props) {
 
 
 Trellos.Settings = function (props) {
-    return e(Trellos.Settings.Profile, { me: props.me });
+    return e(BS.Form, null,
+        e(BS.Form.Group, null,
+            e(Trellos.Settings.Profile, { me: props.me })
+        ),
+        // e(BS.Form.Group, null,
+        //     e(BS.Form.Label, null, 'Время кеширования карточек для поиска, секунд'),
+        //     e(BS.Form.Control, { id: 'trellos-settings-cache-time', type: 'number', style: { width: 'unset' } }),
+        //     e(Trellos.Muted, null, 'Если 0, то карточки не кешируются')
+        // )
+    )
 }
 
 
@@ -250,7 +281,7 @@ Trellos.Export = function (props) {
 
         if (window.trellos_debug) console.log('Trellos', 'Export by filter', filter);
 
-        trelloGetRecursive(`boards/${board.id}/cards`, {
+        Trellos.trelloGetRecursive(`boards/${board.id}/cards`, {
             filter: filter.visibility ? "visible" : "all",
             fields: "id,name,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity",
             members: "true",
@@ -338,7 +369,7 @@ Trellos.Export.Download = function (props) {
             }).join(",");
         }).join("\n");
         if (btn.id == 'trellos-export-mac') text = '\ufeff' + text;
-        downloadAsFile(`export-${props.board.name}.csv`, text);
+        Trellos.downloadAsFile(`export-${props.board.name}.csv`, text);
     }
 
     return e('div', null,
@@ -364,25 +395,15 @@ Trellos.Export.Boards = function (props) {
     React.useEffect(() => {
         if (boards !== null) return; // boards are already loaded
 
-        window.Trello.get('member/me/boards',
-            {
-                fields: 'id,name,shortUrl,closed',
-                organization: false,
-                lists: 'all',
-                filter: 'all',
-                labels: 'none',
-                memberships: 'none',
-                organization_fields: 'none',
-                members: "none"
-            }, (data) => {
-                setBoards(data.sort((a, b) => {
-                    let alpha = [a.name, b.name].sort();
-                    let closed = 0;
-                    if (a.closed && !b.closed) closed = 1;
-                    if (!a.closed && b.closed) closed = -1;
-                    return closed === 0 ? alpha : closed;
-                }))
-            });
+        Trellos.loadMeBoards().then(data => {
+            setBoards(data.sort((a, b) => {
+                let alpha = [a.name, b.name].sort();
+                let closed = 0;
+                if (a.closed && !b.closed) closed = 1;
+                if (!a.closed && b.closed) closed = -1;
+                return closed === 0 ? alpha : closed;
+            }))
+        })
     });
 
     const onSelect = (key) => {
@@ -540,8 +561,14 @@ Trellos.Search = function (props) {
 
     const onSearch = (filter) => {
         if (searchProgress) return;
-        console.log('filter', filter);
+        console.log('Search. filter:', filter);
         setSearchProgress(true);
+
+        /*
+        loading boards
+        search
+        results
+        */
     }
 
     return e('div', null,
@@ -553,29 +580,22 @@ Trellos.Search.Form = function (props) {
     const [boards, setBoards] = React.useState(null);
     const [allBoards, setAllBoards] = React.useState(true);
     const [queryValid, setQueryValid] = React.useState(true);
+    const [invalidMsg, setInvalidMsg] = React.useState('');
     const [formValid, setFormValid] = React.useState(false);
 
     React.useEffect(() => {
         if (boards !== null) return;
 
-        window.Trello.get('member/me/boards',
-            {
-                fields: 'id,name,shortUrl,closed',
-                organization: false,
-                labels: 'none',
-                memberships: 'none',
-                organization_fields: 'none',
-                members: "none"
-            }, (data) => {
-                setBoards(data.sort((a, b) => {
-                    let alpha = [a.name, b.name].sort();
-                    let closed = 0;
-                    if (a.closed && !b.closed) closed = 1;
-                    if (!a.closed && b.closed) closed = -1;
-                    return closed === 0 ? alpha : closed;
-                }))
-            });
-    });
+        Trellos.loadMeBoards().then(data => {
+            setBoards(data.sort((a, b) => {
+                let alpha = [a.name, b.name].sort();
+                let closed = 0;
+                if (a.closed && !b.closed) closed = 1;
+                if (!a.closed && b.closed) closed = -1;
+                return closed === 0 ? alpha : closed;
+            }))
+        })
+    })
 
     const onSelectBoard = (event) => {
         const cb = event.target.closest('input[type="checkbox"]');
@@ -587,7 +607,10 @@ Trellos.Search.Form = function (props) {
 
     const validateQuery = (event) => {
         const val = event.target.value.trim();
-        setQueryValid(val.length == 0 || val.length > 1);
+        let valid = val.length == 0 ||
+            (val.length > Trellos.preferences.minQueryLength &&
+                Porter.stemText(val, Trellos.preferences.minTextLengthToStem).length > 0);
+        setQueryValid(valid)
         validateForm();
     }
 
@@ -615,7 +638,7 @@ Trellos.Search.Form = function (props) {
             e(BS.Form.Control, {
                 type: 'text', placeholder: 'Что ищем?', size: 'lg', id: 'trellos-search-query',
                 onChange: validateQuery, isInvalid: !queryValid
-            }),
+            })
         ),
         e(BS.Form.Group, null,
             e(BS.Form.Check, {
@@ -646,7 +669,7 @@ Trellos.Search.Form = function (props) {
                 })
             )
         ),
-        e(BS.Button, { disabled: !formValid || props.inProgress, type: 'submit' },
+        e(BS.Button, { disabled: !formValid || props.inProgress || !boards, type: 'submit', size: 'lg', className: 'mt-3' },
             props.inProgress ? e(Trellos.Spinner, { className: 'mr-2' }) : null,
             props.inProgress ? 'Поиск…' : 'Найти'
         )
