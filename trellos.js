@@ -16,6 +16,8 @@ const Trellos = function (props) {
     const [validAuth, setValidAuth] = React.useState(false);
     const [me, setMe] = React.useState(null);
     const [tab, setTab] = React.useState('search');
+    // let [firstRun, setFirstRun] = React.useState(true);
+    let [mstate, setMState] = React.useState(null);
 
     const authorize = function () {
         window.Trello.authorize({
@@ -49,31 +51,90 @@ const Trellos = function (props) {
 
     const onChangeTab = function (tab) {
         setTab(tab);
+        if (tab != 'settings') onUpState('tab', tab);
     }
 
     React.useEffect(() => {
-        if (!validAuth) authorize();
+        if (!validAuth) {
+            authorize();
+            return
+        }
+        saveState();
     })
+
+    React.useEffect(() => { // init mstate
+        let state = null;
+        try {
+            state = JSON.parse(decodeURIComponent(atob(
+                Trellos.getCookie(Trellos.config.cookieName)
+            )));
+        } catch { }
+        if (state) {
+            setTab(get(state, 'tab', 'search'));
+        }
+        mstate = state;
+        setMState(state);
+    }, [])
+
+    const onUpState = (name, data) => {
+        let s = Object.assign({}, mstate || {});
+        s[name] = data;
+        setMState(s);
+        saveState();
+    }
+
+    const saveState = () => {
+        if (mstate == null) return;
+        const s = JSON.stringify(mstate);
+        Trellos.setCookie(Trellos.config.cookieName, btoa(encodeURIComponent(s)), { 'max-age': Trellos.config.cookieTtl });
+    }
 
     return e(BS.Container, { className: 'my-3' },
         validAuth ? null : e(Trellos.Auth.Form, { onAuth: authorize }),
         me ? e(Trellos.Nav, { activeKey: tab, onChangeTab: onChangeTab }) : null,
-        me && tab == 'search' ? e(Trellos.Search, { me: me }) : null,
+        me && tab == 'search' ? e(Trellos.Search, { me: me, onUpState: onUpState, initState: mstate }) : null,
         me && tab == 'settings' ? e(Trellos.Settings, { me: me }) : null,
         me && tab == 'export' ? e(Trellos.Export, { me: me }) : null
     );
 }
 
+Trellos.getCookie = (name) => {
+    let matches = document.cookie.match(new RegExp(
+        "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+    ));
+    return matches ? decodeURIComponent(matches[1]) : undefined;
+}
+
+Trellos.setCookie = (name, value, options = {}) => {
+    if (options.expires && options.expires.toUTCString) {
+        options.expires = options.expires.toUTCString();
+    }
+    let updatedCookie = encodeURIComponent(name) + "=" + encodeURIComponent(value);
+    for (let optionKey in options) {
+        updatedCookie += "; " + optionKey;
+        let optionValue = options[optionKey];
+        if (optionValue !== true) {
+            updatedCookie += "=" + optionValue;
+        }
+    }
+    document.cookie = updatedCookie;
+}
+
+Trellos.searchCache = new Cache({ storage: new ObjectStorage() });
+
 Trellos.rndstr = () => {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
-Trellos.preferences = {
+Trellos.config = {
     minWordLengthToStem: 4,
     minQueryLength: 2,
     searchCacheTtl: 1000 * 60,
-    searchPageSize: 30
+    searchPageSize: 30,
+    cookieName: 'trellosjs1',
+    cookieTtle: 60 * 60 * 24 * 365
 }
+
 
 // declOfNum(number, ['задача', 'задачи', 'задач']));
 Trellos.declOfNum = (number, titles) => {
@@ -182,9 +243,6 @@ Trellos.loadMeBoards = async function (filter) {
 }
 
 
-Trellos.searchCache = new Cache({ storage: new ObjectStorage() });
-
-
 Trellos.Back = function (props) {
     const onClick = (event) => {
         event.preventDefault();
@@ -264,6 +322,7 @@ Trellos.Settings = function (props) {
 Trellos.Settings.Profile = function (props) {
     const deauthorize = () => {
         delete localStorage['trello_token'];
+        Trellos.setCookie(Trellos.config.cookieName, null, { 'max-age': -1 })
         window.Trello.deauthorize();
         document.location.reload();
     }
@@ -296,8 +355,6 @@ Trellos.Export = function (props) {
             if (addDays) m.add(addDays, 'day');
             return m.format('YYYY-MM-DD');
         }
-
-        if (window.trellos_debug) console.log('Trellos', 'Export by filter', filter);
 
         Trellos.trelloGetRecursive(`boards/${board.id}/cards`, {
             filter: filter.visibility ? "visible" : "all",
@@ -624,7 +681,11 @@ Trellos.Search = function (props) {
         setSearchProgress(true);
         setSearchResult(null);
 
-        filter.stemQuery = Porter.stemText(filter.query, Trellos.preferences.minWordLengthToStem);
+        let upState = Object.assign({}, filter);
+        delete upState.query;
+        props.onUpState('search', upState);
+
+        filter.stemQuery = Porter.stemText(filter.query, Trellos.config.minWordLengthToStem);
         if (filter.allBoards) filter.boards = boards.map(b => b.id);
 
         let cardsData = [];
@@ -638,7 +699,7 @@ Trellos.Search = function (props) {
                     members: "true",
                     members_fields: "id,fullName,username"
                 })
-                Trellos.searchCache.setItem(idBoard, cards, Trellos.preferences.searchCacheTtl)
+                Trellos.searchCache.setItem(idBoard, cards, Trellos.config.searchCacheTtl)
             }
             cardsData.push(cards);
         };
@@ -648,8 +709,8 @@ Trellos.Search = function (props) {
         cardsData.forEach(async (cards) => {
             cards.forEach(card => {
                 if (!filter.allowArchive && card.closed) return;
-                card.stemName = Porter.stemText(card.name, Trellos.preferences.minWordLengthToStem);
-                card.stemDesc = Porter.stemText(card.desc, Trellos.preferences.minWordLengthToStem);
+                card.stemName = Porter.stemText(card.name, Trellos.config.minWordLengthToStem);
+                card.stemDesc = Porter.stemText(card.desc, Trellos.config.minWordLengthToStem);
                 // search by card name
                 let findedWords = findText(filter.stemQuery, card.stemName) || [];
                 let isOk = filter.allWords ? findedWords.length == filter.stemQuery.length : findedWords.length > 0;
@@ -674,7 +735,10 @@ Trellos.Search = function (props) {
 
     return boards == null ? e(Trellos.Spinner) :
         e('div', null,
-            e(Trellos.Search.Form, { boards: boards, onSubmit: onSearch, inProgress: searchProgress }),
+            e(Trellos.Search.Form, {
+                boards: boards, onSubmit: onSearch, inProgress: searchProgress,
+                initState: get(props.initState, 'search', null)
+            }),
             !searchProgress && searchResult ? e(Trellos.Search.Result, { data: searchResult }) : null
         );
 }
@@ -697,8 +761,8 @@ Trellos.Search.Result = function (props) {
         }
     });
 
-    const dataPage = props.data.slice(page * Trellos.preferences.searchPageSize, (page + 1) * Trellos.preferences.searchPageSize)
-    let pageCount = Math.ceil(props.data.length / Trellos.preferences.searchPageSize);
+    const dataPage = props.data.slice(page * Trellos.config.searchPageSize, (page + 1) * Trellos.config.searchPageSize)
+    let pageCount = Math.ceil(props.data.length / Trellos.config.searchPageSize);
     let pages = [];
     for (let i = 0; i < pageCount; i++) {
         pages.push(e(BS.Pagination.Item, { key: i, active: i == page, onClick: () => { onChangePage(i) } }, `${i + 1}`));
@@ -713,7 +777,7 @@ Trellos.Search.Result = function (props) {
         dataPage.map((card, i) => e(Trellos.Search.Result.Card, {
             key: card.id,
             card: card,
-            index: page * Trellos.preferences.searchPageSize + i
+            index: page * Trellos.config.searchPageSize + i
         })),
         e(BS.Pagination, null,
             pages.length > 1 ? pages : null
@@ -781,6 +845,10 @@ Trellos.Search.Form = function (props) {
     const [validQuery, setValidQuery] = React.useState(true);
     const [validForm, setValidForm] = React.useState(false);
 
+    React.useEffect(() => { // init effect
+        if (get(props.initState, 'allBoards', false)) setAllBoards(true);
+    }, []);
+
     const onSelectBoard = (event) => {
         const cb = event.target.closest('input[type="checkbox"]');
         if (!cb) return;
@@ -792,16 +860,16 @@ Trellos.Search.Form = function (props) {
 
     const validateQuery = (event) => {
         const val = event.target.value.trim();
-        let valid = val.length >= Trellos.preferences.minQueryLength;
-        valid = valid && Porter.stemText(val, Trellos.preferences.minWordLengthToStem).length > 0;
+        let valid = val.length >= Trellos.config.minQueryLength;
+        valid = valid && Porter.stemText(val, Trellos.config.minWordLengthToStem).length > 0;
         setValidQuery(valid);
         validateForm();
     }
 
     const validateForm = () => {
         let query = document.getElementById('trellos-search-query').value.trim();
-        let validQ = query.length >= Trellos.preferences.minQueryLength;
-        validQ = validQ && Porter.stemText(query, Trellos.preferences.minWordLengthToStem).length > 0;
+        let validQ = query.length >= Trellos.config.minQueryLength;
+        validQ = validQ && Porter.stemText(query, Trellos.config.minWordLengthToStem).length > 0;
         setValidQuery(validQ);
 
         let isAllBoards = document.getElementById('trellos-search-all-boards').checked;
@@ -827,34 +895,35 @@ Trellos.Search.Form = function (props) {
         e(BS.Form.Group, null,
             e(BS.Form.Control, {
                 type: 'text', placeholder: 'Что ищем?', size: 'lg', id: 'trellos-search-query',
-                onChange: validateQuery, isInvalid: !validQuery
+                onChange: validateQuery, isInvalid: !validQuery, defaultValue: get(props.initState, 'query', '')
             })
         ),
         e(BS.Form.Group, null,
             e(BS.Form.Check, {
                 inline: true, type: 'checkbox', label: 'Все слова',
-                defaultChecked: true, id: 'trellos-search-all-words'
+                defaultChecked: get(props.initState, 'allWords', true), id: 'trellos-search-all-words'
             }),
             e(BS.Form.Check, {
                 inline: true, type: 'checkbox', label: 'Искать в архиве',
-                id: 'trellos-search-archive'
+                id: 'trellos-search-archive', defaultChecked: get(props.initState, 'allowArchive', false)
             }),
             e(BS.Form.Check, {
                 inline: true, type: 'checkbox', label: 'Сортировка по созданию',
-                id: 'trellos-search-sort-alt'
+                id: 'trellos-search-sort-alt', defaultChecked: get(props.initState, 'sortMode', 'modified') == 'created'
             })
         ),
         e(BS.Form.Group, null,
             e(BS.Form.Check, {
                 inline: true, style: { fontWeight: 'bold' }, defaultChecked: false,
                 id: 'trellos-search-all-boards', value: 'all', label: 'Все доски',
-                onChange: onSelectBoard
+                onChange: onSelectBoard, defaultChecked: get(props.initState, 'allBoards', true)
             }),
             allBoards ? null : props.boards.map(board => {
                 return e(BS.Form.Check, {
                     inline: true, type: 'checkbox', label: board.name, name: 'trellos-search-board',
                     id: `trellos-search-board-${board.id}`, value: board.id, key: board.id,
-                    onChange: onSelectBoard
+                    onChange: onSelectBoard,
+                    defaultChecked: Boolean(get(props.initState, 'boards', []).find(b => b == board.id))
                 })
             })
         ),
