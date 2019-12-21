@@ -916,7 +916,7 @@ Trellos.Search.Form = function (props) {
             e(BS.Form.Check, {
                 inline: true, style: { fontWeight: 'bold' }, defaultChecked: false,
                 id: 'trellos-search-all-boards', value: 'all', label: 'Все доски',
-                onChange: onSelectBoard, defaultChecked: get(props.initState, 'allBoards', true)
+                onChange: onSelectBoard, defaultChecked: get(props.initState, 'allBoards', false)
             }),
             allBoards ? null : props.boards.map(board => {
                 return e(BS.Form.Check, {
