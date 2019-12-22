@@ -59,40 +59,55 @@ const Trellos = function (props) {
             authorize();
             return
         }
-        saveState();
+        // saveState();
     })
 
-    React.useEffect(() => { // init mstate
+    React.useEffect(() => { // init
         let state = null;
         try {
             state = JSON.parse(decodeURIComponent(atob(
                 Trellos.getCookie(Trellos.config.cookieName)
             )));
         } catch { }
-        if (state) {
-            setTab(get(state, 'tab', 'search'));
+
+        const ps = new URLSearchParams(document.location.search);
+        if (ps.has('q')) {
+            try {
+                let filter = JSON.parse(decodeURIComponent(atob(ps.get('q'))));
+                if (filter != null) {
+                    state = state || {};
+                    state.search = state.search || {};
+                }
+                Object.assign(state.search, filter);
+            } catch { }
         }
-        mstate = state;
+        if (state) setTab(get(state, 'tab', 'search'));
         setMState(state);
+        mstate = state;
     }, [])
 
     const onUpState = (name, data) => {
         let s = Object.assign({}, mstate || {});
         s[name] = data;
         setMState(s);
-        saveState();
+        saveState(s);
     }
 
-    const saveState = () => {
-        if (mstate == null) return;
-        const s = JSON.stringify(mstate);
+    const saveState = (state) => {
+        if (mstate == null && !state) return;
+        let o = Object.assign({}, state || mstate);
+        if (o.search && o.search.query) delete o.search.query;
+        const s = JSON.stringify(o);
         Trellos.setCookie(Trellos.config.cookieName, btoa(encodeURIComponent(s)), { 'max-age': Trellos.config.cookieTtl });
     }
 
     return e(BS.Container, { className: 'my-3' },
         validAuth ? null : e(Trellos.Auth.Form, { onAuth: authorize }),
         me ? e(Trellos.Nav, { activeKey: tab, onChangeTab: onChangeTab }) : null,
-        me && tab == 'search' ? e(Trellos.Search, { me: me, onUpState: onUpState, initState: mstate }) : null,
+        me && tab == 'search' ? e(Trellos.Search, {
+            me: me, onUpState: onUpState,
+            initState: Object.assign({}, mstate)
+        }) : null,
         me && tab == 'settings' ? e(Trellos.Settings, { me: me }) : null,
         me && tab == 'export' ? e(Trellos.Export, { me: me }) : null
     );
@@ -212,7 +227,7 @@ Trellos.downloadAsFile = function (filename, text) {
     // (Safari may have pipeTo but it's useless without the WritableStream)
     if (window.WritableStream && readableStream.pipeTo) {
         return readableStream.pipeTo(fileStream)
-            .then(() => console.log('done writing file ' + filename))
+            .then(() => { })
     }
 
     // Write (pipe) manually
@@ -681,6 +696,7 @@ Trellos.Search = function (props) {
         setSearchProgress(true);
         setSearchResult(null);
 
+        let cleanFilter = Object.assign({}, filter);
         let upState = Object.assign({}, filter);
         delete upState.query;
         props.onUpState('search', upState);
@@ -729,6 +745,7 @@ Trellos.Search = function (props) {
 
         searchResult.sort(filter.sortMode == 'created' ? cardCreatedComparer : cardLastActivityComparer);
         searchResult.hash = btoa(encodeURIComponent(Trellos.rndstr()));
+        searchResult.link = document.location.pathname + "?q=" + btoa(encodeURIComponent(JSON.stringify(cleanFilter)));
         setSearchResult(searchResult);
         setSearchProgress(false);
     }
@@ -834,19 +851,29 @@ Trellos.Search.Result.Card = function (props) {
 
 Trellos.Search.Result.Head = function (props) {
     if (!props.data.length) return e(BS.Alert, { variant: 'secondary' }, 'Ничего не найдено')
-    return e(Trellos.Muted, { className: 'mb-4 d-block' },
-        `Найдено ${props.data.length} `,
-        Trellos.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
+    return e('div', { className: 'mb-4' },
+        e(Trellos.Muted, null,
+            `Найдено ${props.data.length} `,
+            Trellos.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
+        ),
+        e('small', null,
+            e('a', { className: 'ml-3 fas fa-link', href: props.data.link, target: '_blank' })
+        )
     )
 }
 
 Trellos.Search.Form = function (props) {
     const [allBoards, setAllBoards] = React.useState(false);
-    const [validQuery, setValidQuery] = React.useState(true);
-    const [validForm, setValidForm] = React.useState(false);
+    let [validQuery, setValidQuery] = React.useState(true);
+    let [validForm, setValidForm] = React.useState(false);
 
     React.useEffect(() => { // init effect
         if (get(props.initState, 'allBoards', false)) setAllBoards(true);
+        if (get(props.initState, 'query', '') && validateForm()) {
+            validForm = true;
+            validQuery = true;
+            onSubmit();
+        }
     }, []);
 
     const onSelectBoard = (event) => {
@@ -874,11 +901,13 @@ Trellos.Search.Form = function (props) {
 
         let isAllBoards = document.getElementById('trellos-search-all-boards').checked;
         let hasCheckedBoards = document.querySelectorAll('#trellos-search-form input[name="trellos-search-board"]:checked').length > 0;
-        setValidForm(validQ && (isAllBoards || hasCheckedBoards));
+        let ok = validQ && (isAllBoards || hasCheckedBoards);
+        setValidForm(ok);
+        return ok;
     }
 
     const onSubmit = (event) => {
-        event.preventDefault();
+        if (event) event.preventDefault();
         if (!validForm || !validQuery) return false;
         props.onSubmit({
             query: document.getElementById('trellos-search-query').value.trim(),
@@ -895,7 +924,8 @@ Trellos.Search.Form = function (props) {
         e(BS.Form.Group, null,
             e(BS.Form.Control, {
                 type: 'text', placeholder: 'Что ищем?', size: 'lg', id: 'trellos-search-query',
-                onChange: validateQuery, isInvalid: !validQuery, defaultValue: get(props.initState, 'query', '')
+                onChange: validateQuery, isInvalid: !validQuery,
+                defaultValue: get(props.initState, 'query', '')
             })
         ),
         e(BS.Form.Group, null,
@@ -929,7 +959,8 @@ Trellos.Search.Form = function (props) {
         ),
         e(BS.Button, {
             disabled: !validForm || props.inProgress,
-            type: 'submit', size: 'lg', className: 'mt-3 px-4'
+            type: 'submit', size: 'lg', className: 'mt-3 px-4',
+            id: 'trellos-search-form-button'
         },
             props.inProgress ? e(Trellos.Spinner, { className: 'mr-2' }) : null,
             props.inProgress ? 'Поиск…' : 'Найти'
