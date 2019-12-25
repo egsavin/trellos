@@ -455,26 +455,21 @@ Trellos.Export.Download = function (props) {
         let text = props.data.map(row => {
             return row.map(cell => {
                 return csvEscape(cell)
-            }).join(",");
+            }).join(btn.id == 'trellos-export-semicolon' ? ';' : ',');
         }).join("\n");
-        if (btn.id == 'trellos-export-mac') text = '\ufeff' + text;
-        Trellos.downloadAsFile(`export-${props.board.name}.csv`, text);
+        text = '\ufeff' + text; // UTF-8 BOM
+        Trellos.downloadAsFile(`export-${props.board.name.toLowerCase()}.csv`, text);
     }
 
-    return e('div', null,
-        e('div', { className: 'mb-3' },
+    return e('div', { style: { lineHeight: '3rem' } },
+        e('div', { className: 'mb-2' },
+            e('i', { className: 'fas fa-file-download mr-2 text-muted', style: { fontSize: '1.6rem' } }),
             (`${props.data.length - 1} ` + Trellos.declOfNum(props.data.length - 1, ['карточка', 'карточки', 'карточек']))
         ),
-        e('i', {
-            className: 'fas fa-file-download mr-1 text-muted', style: {
-                fontSize: '130%', verticalAlign: 'middle'
-            }
-        }),
-        e(Trellos.Muted, { as: 'strong', className: 'mr-3', style: { verticalAlign: 'middle' } }, 'CSV'),
-        e(BS.Button, { variant: "outline-primary", className: 'mr-3', id: "trellos-export-mac", onClick: onDownload },
-            e('i', { className: 'fab fa-apple mr-1' }), "Mac"),
-        e(BS.Button, { variant: "outline-primary", onClick: onDownload, id: "trellos-export-win" },
-            e('i', { className: 'fab fa-windows mr-1' }), "Windows"),
+        e(BS.Button, { variant: "outline-primary", className: 'mr-2', onClick: onDownload, id: "trellos-export-semicolon" },
+            e('i', { className: 'far fa-file-excel mr-1', style: { fontSize: '1.3rem', verticalAlign: 'middle' } }), `export-${props.board.name.toLowerCase()}.csv`),
+        e(BS.Button, { variant: "outline-primary", id: "trellos-export-comma", onClick: onDownload },
+            e('i', { className: 'far fa-file-alt mr-1', style: { fontSize: '1.3rem', verticalAlign: 'middle' } }), `export-${props.board.name.toLowerCase()}.csv`),
     )
 }
 
