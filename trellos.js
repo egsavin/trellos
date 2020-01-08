@@ -16,8 +16,7 @@ const Trellos = function (props) {
     const [validAuth, setValidAuth] = React.useState(false);
     const [me, setMe] = React.useState(null);
     const [tab, setTab] = React.useState('search');
-    // let [firstRun, setFirstRun] = React.useState(true);
-    let [mstate, setMState] = React.useState(null);
+    let [appState, setAppState] = React.useState(null);
 
     const authorize = function () {
         window.Trello.authorize({
@@ -59,43 +58,26 @@ const Trellos = function (props) {
             authorize();
             return
         }
-        // saveState();
     })
 
     React.useEffect(() => { // init
-        let state = null;
-        try {
-            state = JSON.parse(decodeURIComponent(atob(
-                Trellos.getCookie(Trellos.config.cookieName)
-            )));
-        } catch { }
-
-        const ps = new URLSearchParams(document.location.search);
-        if (ps.has('q')) {
-            try {
-                let filter = JSON.parse(decodeURIComponent(atob(ps.get('q'))));
-                if (filter != null) {
-                    state = state || {};
-                    state.search = state.search || {};
-                }
-                Object.assign(state.search, filter);
-            } catch { }
-        }
-        if (state) setTab(get(state, 'tab', 'search'));
-        setMState(state);
-        mstate = state;
+        let state = Trellos.getInitalState();
+        setTab(get(state, 'tab', 'search'));
+        setAppState(state);
+        console.log('istate', state);
+        // appState = state;
     }, [])
 
     const onUpState = (name, data) => {
-        let s = Object.assign({}, mstate || {});
+        let s = Object.assign({}, appState || {});
         s[name] = data;
-        setMState(s);
+        setAppState(s);
         saveState(s);
     }
 
     const saveState = (state) => {
-        if (mstate == null && !state) return;
-        let o = Object.assign({}, state || mstate);
+        if (appState == null && !state) return;
+        let o = Object.assign({}, state || appState);
         if (o.search && o.search.query) delete o.search.query;
         const s = JSON.stringify(o);
         Trellos.setCookie(Trellos.config.cookieName, btoa(encodeURIComponent(s)), { 'max-age': Trellos.config.cookieTtl });
@@ -105,8 +87,7 @@ const Trellos = function (props) {
         validAuth ? null : e(Trellos.Auth.Form, { onAuth: authorize }),
         me ? e(Trellos.Nav, { activeKey: tab, onChangeTab: onChangeTab }) : null,
         me && tab == 'search' ? e(Trellos.Search, {
-            me: me, onUpState: onUpState,
-            initState: Object.assign({}, mstate)
+            me: me, onUpState: onUpState
         }) : null,
         me && tab == 'settings' ? e(Trellos.Settings, { me: me }) : null,
         me && tab == 'export' ? e(Trellos.Export, { me: me }) : null
@@ -149,6 +130,31 @@ Trellos.config = {
     cookieName: 'trellosjs1',
     cookieTtle: 60 * 60 * 24 * 365
 }
+
+Trellos.getInitalState = () => {
+    const globalKey = 'initialState';
+    let state = get(Trellos, globalKey);
+    if (state != undefined) return state;
+    state = null;
+    try {
+        state = JSON.parse(decodeURIComponent(atob(
+            Trellos.getCookie(Trellos.config.cookieName)
+        )));
+    } catch { }
+
+
+    const ps = new URLSearchParams(document.location.search);
+    Array.from(ps.keys()).forEach(queryKey => {
+        try {
+            let dataItem = JSON.parse(decodeURIComponent(atob(ps.get(queryKey))));
+            state = state || {};
+            state[queryKey] = dataItem;
+        } catch { }
+    });
+    Trellos[globalKey] = Object.assign({}, state);
+    return Trellos[globalKey];
+}
+
 
 
 // declOfNum(number, ['задача', 'задачи', 'задач']));
@@ -740,7 +746,7 @@ Trellos.Search = function (props) {
 
         searchResult.sort(filter.sortMode == 'created' ? cardCreatedComparer : cardLastActivityComparer);
         searchResult.hash = btoa(encodeURIComponent(Trellos.rndstr()));
-        searchResult.link = document.location.pathname + "?q=" + btoa(encodeURIComponent(JSON.stringify(cleanFilter)));
+        searchResult.link = document.location.pathname + "?search=" + btoa(encodeURIComponent(JSON.stringify(cleanFilter)));
         setSearchResult(searchResult);
         setSearchProgress(false);
     }
@@ -749,7 +755,6 @@ Trellos.Search = function (props) {
         e('div', null,
             e(Trellos.Search.Form, {
                 boards: boards, onSubmit: onSearch, inProgress: searchProgress,
-                initState: get(props.initState, 'search', null)
             }),
             !searchProgress && searchResult ? e(Trellos.Search.Result, { data: searchResult }) : null
         );
@@ -848,7 +853,8 @@ Trellos.Search.Result.Head = function (props) {
     if (!props.data.length) return e(BS.Alert, { variant: 'secondary' }, 'Ничего не найдено')
     return e('div', { className: 'mb-4' },
         e(Trellos.Muted, null,
-            `Найдено ${props.data.length} `,
+            Trellos.declOfNum(props.data.length, ["Найдена", "Найдено", "Найдено"]),
+            ` ${props.data.length} `,
             Trellos.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
         ),
         e('small', null,
@@ -861,10 +867,11 @@ Trellos.Search.Form = function (props) {
     const [allBoards, setAllBoards] = React.useState(false);
     let [validQuery, setValidQuery] = React.useState(true);
     let [validForm, setValidForm] = React.useState(false);
+    let [initState, setInitState] = React.useState(get(Trellos.getInitalState(), 'search', null));
 
     React.useEffect(() => { // init effect
-        if (get(props.initState, 'allBoards', false)) setAllBoards(true);
-        if (get(props.initState, 'query', '') && validateForm()) {
+        if (get(initState, 'allBoards', false)) setAllBoards(true);
+        if (get(initState, 'query', '') && validateForm()) {
             validForm = true;
             validQuery = true;
             onSubmit();
@@ -920,35 +927,35 @@ Trellos.Search.Form = function (props) {
             e(BS.Form.Control, {
                 type: 'text', placeholder: 'Что ищем?', size: 'lg', id: 'trellos-search-query',
                 onChange: validateQuery, isInvalid: !validQuery,
-                defaultValue: get(props.initState, 'query', '')
+                defaultValue: get(initState, 'query', '')
             })
         ),
         e(BS.Form.Group, null,
             e(BS.Form.Check, {
                 inline: true, type: 'checkbox', label: 'Все слова',
-                defaultChecked: get(props.initState, 'allWords', true), id: 'trellos-search-all-words'
+                defaultChecked: get(initState, 'allWords', true), id: 'trellos-search-all-words'
             }),
             e(BS.Form.Check, {
                 inline: true, type: 'checkbox', label: 'Искать в архиве',
-                id: 'trellos-search-archive', defaultChecked: get(props.initState, 'allowArchive', false)
+                id: 'trellos-search-archive', defaultChecked: get(initState, 'allowArchive', false)
             }),
             e(BS.Form.Check, {
                 inline: true, type: 'checkbox', label: 'Сортировка по созданию',
-                id: 'trellos-search-sort-alt', defaultChecked: get(props.initState, 'sortMode', 'modified') == 'created'
+                id: 'trellos-search-sort-alt', defaultChecked: get(initState, 'sortMode', 'modified') == 'created'
             })
         ),
         e(BS.Form.Group, null,
             e(BS.Form.Check, {
                 inline: true, style: { fontWeight: 'bold' }, defaultChecked: false,
                 id: 'trellos-search-all-boards', value: 'all', label: 'Все доски',
-                onChange: onSelectBoard, defaultChecked: get(props.initState, 'allBoards', false)
+                onChange: onSelectBoard, defaultChecked: get(initState, 'allBoards', false)
             }),
             allBoards ? null : props.boards.map(board => {
                 return e(BS.Form.Check, {
                     inline: true, type: 'checkbox', label: board.name, name: 'trellos-search-board',
                     id: `trellos-search-board-${board.id}`, value: board.id, key: board.id,
                     onChange: onSelectBoard,
-                    defaultChecked: Boolean(get(props.initState, 'boards', []).find(b => b == board.id))
+                    defaultChecked: Boolean(get(initState, 'boards', []).find(b => b == board.id))
                 })
             })
         ),
