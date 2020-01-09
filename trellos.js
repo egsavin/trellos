@@ -203,6 +203,7 @@ Trellos.getInitalState = () => {
             state = state || {};
             state[queryKey] = dataItem;
         } catch { 
+            state = state || {};
             state[queryKey] = decodeURIComponent(ps.get(queryKey));
         }
     });
