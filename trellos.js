@@ -64,8 +64,6 @@ const Trellos = function (props) {
         let state = Trellos.getInitalState();
         setTab(get(state, 'tab', 'search'));
         setAppState(state);
-        console.log('istate', state);
-        // appState = state;
     }, [])
 
     const onUpState = (name, data) => {
@@ -80,7 +78,7 @@ const Trellos = function (props) {
         let o = Object.assign({}, state || appState);
         if (o.search && o.search.query) delete o.search.query;
         const s = JSON.stringify(o);
-        Trellos.setCookie(Trellos.config.cookieName, btoa(encodeURIComponent(s)), { 'max-age': Trellos.config.cookieTtl });
+        Trellos.utils.setCookie(Trellos.config.cookieName, btoa(encodeURIComponent(s)), { 'max-age': Trellos.config.cookieTtl });
     }
 
     return e(BS.Container, { className: 'my-3' },
@@ -94,14 +92,19 @@ const Trellos = function (props) {
     );
 }
 
-Trellos.getCookie = (name) => {
+
+/* utils */
+
+Trellos.utils = {}
+
+Trellos.utils.getCookie = (name) => {
     let matches = document.cookie.match(new RegExp(
         "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
     ));
     return matches ? decodeURIComponent(matches[1]) : undefined;
 }
 
-Trellos.setCookie = (name, value, options = {}) => {
+Trellos.utils.setCookie = (name, value, options = {}) => {
     if (options.expires && options.expires.toUTCString) {
         options.expires = options.expires.toUTCString();
     }
@@ -116,11 +119,61 @@ Trellos.setCookie = (name, value, options = {}) => {
     document.cookie = updatedCookie;
 }
 
-Trellos.searchCache = new Cache({ storage: new ObjectStorage() });
+// declOfNum(number, ['задача', 'задачи', 'задач']));
+Trellos.utils.declOfNum = (number, titles) => {
+    const cases = [2, 0, 1, 1, 1, 2];
+    return titles[(number % 100 > 4 && number % 100 < 20) ? 2 : cases[(number % 10 < 5) ? number % 10 : 5]];
+}
 
-Trellos.rndstr = () => {
+Trellos.utils.unionArrays = (arr1, arr2) => {
+    let arr3 = arr1.concat(arr2);
+    let arr4 = arr3.filter(function (item, pos) {
+        return arr3.indexOf(item) == pos;
+    })
+    return arr4;
+}
+
+// https://github.com/jimmywarting/StreamSaver.js
+Trellos.utils.downloadAsFile = function (filename, text) {
+    const blob = new Blob(Array.from(text))
+    const fileStream = streamSaver.createWriteStream(filename, {
+        size: blob.size // Makes the procentage visiable in the download
+    })
+
+    // One quick alternetive way if you don't want the hole blob.js thing:
+    // const readableStream = new Response(
+    //   Blob || String || ArrayBuffer || ArrayBufferView
+    // ).body
+    const readableStream = blob.stream()
+
+    // more optimized pipe version
+    // (Safari may have pipeTo but it's useless without the WritableStream)
+    if (window.WritableStream && readableStream.pipeTo) {
+        return readableStream.pipeTo(fileStream)
+            .then(() => { })
+    }
+
+    // Write (pipe) manually
+    window.writer = fileStream.getWriter()
+
+    const reader = readableStream.getReader()
+    const pump = () => reader.read()
+        .then(res => res.done
+            ? writer.close()
+            : writer.write(res.value).then(pump))
+
+    pump()
+}
+
+
+Trellos.utils.rndstr = () => {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
+
+/* end utils */
+
+
+Trellos.searchCache = new Cache({ storage: new ObjectStorage() });
 
 Trellos.config = {
     minWordLengthToStem: 4,
@@ -138,7 +191,7 @@ Trellos.getInitalState = () => {
     state = null;
     try {
         state = JSON.parse(decodeURIComponent(atob(
-            Trellos.getCookie(Trellos.config.cookieName)
+            Trellos.utils.getCookie(Trellos.config.cookieName)
         )));
     } catch { }
 
@@ -149,26 +202,12 @@ Trellos.getInitalState = () => {
             let dataItem = JSON.parse(decodeURIComponent(atob(ps.get(queryKey))));
             state = state || {};
             state[queryKey] = dataItem;
-        } catch { }
+        } catch { 
+            state[queryKey] = decodeURIComponent(ps.get(queryKey));
+        }
     });
     Trellos[globalKey] = Object.assign({}, state);
     return Trellos[globalKey];
-}
-
-
-
-// declOfNum(number, ['задача', 'задачи', 'задач']));
-Trellos.declOfNum = (number, titles) => {
-    const cases = [2, 0, 1, 1, 1, 2];
-    return titles[(number % 100 > 4 && number % 100 < 20) ? 2 : cases[(number % 10 < 5) ? number % 10 : 5]];
-}
-
-Trellos.unionArrays = (arr1, arr2) => {
-    let arr3 = arr1.concat(arr2);
-    let arr4 = arr3.filter(function (item, pos) {
-        return arr3.indexOf(item) == pos;
-    })
-    return arr4;
 }
 
 // https://help.trello.com/article/759-getting-the-time-a-card-or-board-was-created
@@ -214,38 +253,6 @@ Trellos.trelloGetRecursive = async function (path, parameters, chunkCallback) {
 
     await recursiveLoad(parameters.before || ""); // start loading
     return allData;
-}
-
-// https://github.com/jimmywarting/StreamSaver.js
-Trellos.downloadAsFile = function (filename, text) {
-    const blob = new Blob(Array.from(text))
-    const fileStream = streamSaver.createWriteStream(filename, {
-        size: blob.size // Makes the procentage visiable in the download
-    })
-
-    // One quick alternetive way if you don't want the hole blob.js thing:
-    // const readableStream = new Response(
-    //   Blob || String || ArrayBuffer || ArrayBufferView
-    // ).body
-    const readableStream = blob.stream()
-
-    // more optimized pipe version
-    // (Safari may have pipeTo but it's useless without the WritableStream)
-    if (window.WritableStream && readableStream.pipeTo) {
-        return readableStream.pipeTo(fileStream)
-            .then(() => { })
-    }
-
-    // Write (pipe) manually
-    window.writer = fileStream.getWriter()
-
-    const reader = readableStream.getReader()
-    const pump = () => reader.read()
-        .then(res => res.done
-            ? writer.close()
-            : writer.write(res.value).then(pump))
-
-    pump()
 }
 
 Trellos.loadMeBoards = async function (filter) {
@@ -343,7 +350,7 @@ Trellos.Settings = function (props) {
 Trellos.Settings.Profile = function (props) {
     const deauthorize = () => {
         delete localStorage['trello_token'];
-        Trellos.setCookie(Trellos.config.cookieName, null, { 'max-age': -1 })
+        Trellos.utils.setCookie(Trellos.config.cookieName, null, { 'max-age': -1 })
         window.Trello.deauthorize();
         document.location.reload();
     }
@@ -464,13 +471,13 @@ Trellos.Export.Download = function (props) {
             }).join(btn.id == 'trellos-export-semicolon' ? ';' : ',');
         }).join("\n");
         text = '\ufeff' + text; // UTF-8 BOM
-        Trellos.downloadAsFile(`export-${props.board.name.toLowerCase()}.csv`, text);
+        Trellos.utils.downloadAsFile(`export-${props.board.name.toLowerCase()}.csv`, text);
     }
 
     return e('div', { style: { lineHeight: '3rem' } },
         e('div', { className: 'mb-2' },
             e('i', { className: 'fas fa-file-download mr-2 text-muted', style: { fontSize: '1.6rem' } }),
-            (`${props.data.length - 1} ` + Trellos.declOfNum(props.data.length - 1, ['карточка', 'карточки', 'карточек']))
+            (`${props.data.length - 1} ` + Trellos.utils.declOfNum(props.data.length - 1, ['карточка', 'карточки', 'карточек']))
         ),
         e(BS.Button, { variant: "outline-primary", className: 'mr-2', onClick: onDownload, id: "trellos-export-semicolon" },
             e('i', { className: 'far fa-file-excel mr-1', style: { fontSize: '1.3rem', verticalAlign: 'middle' } }), `export-${props.board.name.toLowerCase()}.csv`),
@@ -733,7 +740,7 @@ Trellos.Search = function (props) {
                 let isOk = filter.allWords ? findedWords.length == filter.stemQuery.length : findedWords.length > 0;
                 // search by card desc if it needed
                 if (!isOk) {
-                    findedWords = Trellos.unionArrays(findedWords, findText(filter.stemQuery, card.stemDesc) || []);
+                    findedWords = Trellos.utils.unionArrays(findedWords, findText(filter.stemQuery, card.stemDesc) || []);
                     isOk = filter.allWords ? findedWords.length == filter.stemQuery.length : findedWords.length > 0;
                 }
                 if (!isOk) return;
@@ -745,8 +752,10 @@ Trellos.Search = function (props) {
         })
 
         searchResult.sort(filter.sortMode == 'created' ? cardCreatedComparer : cardLastActivityComparer);
-        searchResult.hash = btoa(encodeURIComponent(Trellos.rndstr()));
-        searchResult.link = document.location.pathname + "?search=" + btoa(encodeURIComponent(JSON.stringify(cleanFilter)));
+        searchResult.hash = btoa(encodeURIComponent(Trellos.utils.rndstr()));
+        searchResult.link = document.location.origin + document.location.pathname + 
+            "?search=" + btoa(encodeURIComponent(JSON.stringify(cleanFilter))) +
+            "&tab=search";
         setSearchResult(searchResult);
         setSearchProgress(false);
     }
@@ -831,7 +840,7 @@ Trellos.Search.Result.Card = function (props) {
                 e('b', { className: 'mr-3' }, props.index + 1),
                 e('span', { className: 'mr-3' }, `${props.card.board.name} / ${props.card.list.name}`),
                 props.card.labels.map(label => {
-                    return e(Trellos.TrelloLabel, { key: label.id + Trellos.rndstr(), variant: label.color, className: 'mr-1' }, label.name)
+                    return e(Trellos.TrelloLabel, { key: label.id + Trellos.utils.rndstr(), variant: label.color, className: 'mr-1' }, label.name)
                 })
             )
         ),
@@ -850,16 +859,49 @@ Trellos.Search.Result.Card = function (props) {
 }
 
 Trellos.Search.Result.Head = function (props) {
+    const styles = {
+        searchLinkBlock: { display: 'inline-block' },
+        searchLinkInput: {
+            padding: 0,
+            width: '1px',
+            fontSize: '1px',
+            display: 'inline',
+            border: 'none',
+            color: 'transparent',
+            backgroundColor: 'transparent'
+        }
+    }
+
+    const onCopySearchLink = (event) => {
+        event.preventDefault();
+        const inp = document.getElementById('trellos-search-result-link');
+        inp.focus();
+        inp.select();
+        document.execCommand("copy");
+        const btn = event.target.closest('a');
+        btn.className += ' text-success';
+        inp.blur();
+        setTimeout(function() {
+            btn.className = btn.className.replace(/ text-success/, '');
+        }, 1500);
+    }
+
     if (!props.data.length) return e(BS.Alert, { variant: 'secondary' }, 'Ничего не найдено')
     return e('div', { className: 'mb-4' },
-        e(Trellos.Muted, null,
-            Trellos.declOfNum(props.data.length, ["Найдена", "Найдено", "Найдено"]),
+        e(Trellos.Muted, { className: 'mr-5' },
+            Trellos.utils.declOfNum(props.data.length, ["Найдена", "Найдено", "Найдено"]),
             ` ${props.data.length} `,
-            Trellos.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
+            Trellos.utils.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
         ),
-        e('small', null,
-            e('a', { className: 'ml-3 fas fa-link', href: props.data.link, target: '_blank' })
-        )
+        e('small', { style: styles.searchLinkBlock },
+            e('input', { id: 'trellos-search-result-link', style: styles.searchLinkInput, value: props.data.link }),
+            e(Trellos.IconLink, {
+                href: props.data.link, variant: 'far fa-copy',
+                onClick: onCopySearchLink
+            }, 'Копировать ссылку на этот поиск'),
+            e('a', { className: 'ml-4 fas fa-external-link-alt', href: props.data.link, target: '_blank' })
+        ),
+
     )
 }
 
@@ -1006,4 +1048,16 @@ Trellos.Search.MarkedText = (props) => {
     if (props.replaceNewline) html = html.replace(/\n/gm, '<br>');
     html = html.replace(r, '<mark>$1</mark>')
     return e('span', { dangerouslySetInnerHTML: { __html: html } });
+}
+
+Trellos.IconLink = (props) => {
+    let opts = Object.assign({}, props);
+    opts.className = 'icon-link ' + (opts.className || '');
+    delete opts.variant;
+    delete opts.children;
+
+    return e('a', opts,
+        e('span', { className: `mr-1 ${props.variant}` }),
+        props.children
+    )
 }
