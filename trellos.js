@@ -5,6 +5,7 @@ window.onload = () => { ReactDOM.render(e(Trellos), document.getElementById('tre
 const e = React.createElement;
 const BS = ReactBootstrap;
 
+
 const get = function (props, name, def) {
     if (props == null) return def;
     if (typeof (props) != 'object') return def;
@@ -94,6 +95,10 @@ const Trellos = function (props) {
 
 
 /* utils */
+
+Trellos.Form = {};
+
+Trellos.nbsp = '\u00A0';
 
 Trellos.utils = {}
 
@@ -202,7 +207,7 @@ Trellos.getInitalState = () => {
             let dataItem = JSON.parse(decodeURIComponent(atob(ps.get(queryKey))));
             state = state || {};
             state[queryKey] = dataItem;
-        } catch { 
+        } catch {
             state = state || {};
             state[queryKey] = decodeURIComponent(ps.get(queryKey));
         }
@@ -604,8 +609,8 @@ Trellos.Export.Form.Lists = function (props) {
 
 
 Trellos.Export.Form.Period = function (props) {
-    const [since, setSince] = React.useState({ value: '', parsed: '\u00A0', valid: true });
-    const [before, setBefore] = React.useState({ value: '', parsed: '\u00A0', valid: true });
+    const [since, setSince] = React.useState({ value: '', parsed: Trellos.nbsp, valid: true });
+    const [before, setBefore] = React.useState({ value: '', parsed: Trellos.nbsp, valid: true });
     const [periodValid, setPeriodValid] = React.useState(true);
 
     const onChange = (event) => {
@@ -617,7 +622,7 @@ Trellos.Export.Form.Period = function (props) {
             return {
                 m: m,
                 value: ob.value,
-                parsed: ob.value && m.isValid() ? m.format('DD.MM.YYYY') + (i > 0 ? ' 23:59:59' : '') : '\u00A0',
+                parsed: ob.value && m.isValid() ? m.format('DD.MM.YYYY') + (i > 0 ? ' 23:59:59' : '') : Trellos.nbsp,
                 valid: !ob.value || m.isValid()
             }
         });
@@ -702,6 +707,7 @@ Trellos.Search = function (props) {
 
     const onSearch = async (filter) => {
         if (searchProgress) return;
+        console.log(filter); // TODO: usage since and before
         setSearchProgress(true);
         setSearchResult(null);
 
@@ -754,7 +760,7 @@ Trellos.Search = function (props) {
 
         searchResult.sort(filter.sortMode == 'created' ? cardCreatedComparer : cardLastActivityComparer);
         searchResult.hash = btoa(encodeURIComponent(Trellos.utils.rndstr()));
-        searchResult.link = document.location.origin + document.location.pathname + 
+        searchResult.link = document.location.origin + document.location.pathname +
             "?search=" + btoa(encodeURIComponent(JSON.stringify(cleanFilter))) +
             "&tab=search";
         setSearchResult(searchResult);
@@ -835,14 +841,27 @@ Trellos.Search.Result.Card = function (props) {
             .scrollIntoView({ block: "start", behavior: "smooth", inline: "nearest" });
     }
 
+
+    const styles = {
+        cardCreatedAt: {
+            fontSize: '60%'
+        }
+    }
+
     return e(BS.Card, { className: 'mb-5 trellos-card', card: props.card.id }, e(BS.Card.Body, null,
         e(BS.Card.Text, { className: 'text-secondary' },
-            e('small', null,
+            e('small', { className: 'mr-3' },
                 e('b', { className: 'mr-3' }, props.index + 1),
-                e('span', { className: 'mr-3' }, `${props.card.board.name} / ${props.card.list.name}`),
+                e('span', { className: 'mr-3' },
+                    e('span', { title: 'Доска' }, props.card.board.name), ' / ',
+                    e('span', { title: 'Список' }, props.card.list.name)
+                ),
                 props.card.labels.map(label => {
                     return e(Trellos.TrelloLabel, { key: label.id + Trellos.utils.rndstr(), variant: label.color, className: 'mr-1' }, label.name)
                 })
+            ),
+            e('span', { className: "text-muted", title: "Время создания", style: styles.cardCreatedAt },
+                Trellos.convertTrelloIdToTime(props.card.id).format('DD.MM.YYYY hh:mm')
             )
         ),
         e(BS.Card.Subtitle, null,
@@ -882,7 +901,7 @@ Trellos.Search.Result.Head = function (props) {
         const btn = event.target.closest('a');
         btn.className += ' text-success';
         inp.blur();
-        setTimeout(function() {
+        setTimeout(function () {
             btn.className = btn.className.replace(/ text-success/, '');
         }, 1500);
     }
@@ -895,7 +914,7 @@ Trellos.Search.Result.Head = function (props) {
             Trellos.utils.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
         ),
         e('small', { style: styles.searchLinkBlock },
-            e('input', { id: 'trellos-search-result-link', style: styles.searchLinkInput, value: props.data.link }),
+            e('input', { id: 'trellos-search-result-link', style: styles.searchLinkInput, defaultValue: props.data.link }),
             e(Trellos.IconLink, {
                 href: props.data.link, variant: 'far fa-copy',
                 onClick: onCopySearchLink
@@ -911,6 +930,7 @@ Trellos.Search.Form = function (props) {
     let [validQuery, setValidQuery] = React.useState(true);
     let [validForm, setValidForm] = React.useState(false);
     let [initState, setInitState] = React.useState(get(Trellos.getInitalState(), 'search', null));
+    let [period, setPeriod] = React.useState({ since: null, before: null });
 
     React.useEffect(() => { // init effect
         if (get(initState, 'allBoards', false)) setAllBoards(true);
@@ -938,6 +958,10 @@ Trellos.Search.Form = function (props) {
         validateForm();
     }
 
+    const onChangePeriod = (since, before) => {
+        setPeriod({ since: since, before: before });
+    }
+
     const validateForm = () => {
         let query = document.getElementById('trellos-search-query').value.trim();
         let validQ = query.length >= Trellos.config.minQueryLength;
@@ -961,7 +985,9 @@ Trellos.Search.Form = function (props) {
             sortMode: document.getElementById('trellos-search-sort-alt').checked ? 'created' : 'modified',
             allBoards: document.getElementById('trellos-search-all-boards').checked,
             boards: Array.from(document.querySelectorAll('#trellos-search-form input[name="trellos-search-board"]:checked'))
-                .map(x => x.value)
+                .map(x => x.value),
+            since: get(period, 'since', null),
+            before: get(period, 'before', null)
         })
     }
 
@@ -1000,6 +1026,14 @@ Trellos.Search.Form = function (props) {
                     onChange: onSelectBoard,
                     defaultChecked: Boolean(get(initState, 'boards', []).find(b => b == board.id))
                 })
+            })
+        ),
+        e(BS.Form.Group, { className: 'mb-0' }, 'Дата создания'),
+        e(BS.Form.Group, null,
+            e(Trellos.Form.Period, {
+                since: initState.since,
+                before: initState.before,
+                onChange: onChangePeriod
             })
         ),
         e(BS.Button, {
@@ -1061,4 +1095,66 @@ Trellos.IconLink = (props) => {
         e('span', { className: `mr-1 ${props.variant}` }),
         props.children
     )
+}
+
+
+Trellos.Form.Period = function (props) {
+    const [since, setSince] = React.useState({ value: '', parsed: Trellos.nbsp, valid: true });
+    const [before, setBefore] = React.useState({ value: '', parsed: Trellos.nbsp, valid: true });
+
+    const onChange = (event) => {
+        const cName = event.target.name;
+        let s = cName == 'since' ? { value: event.target.value.trim() } : since;
+        let b = cName == 'before' ? { value: event.target.value.trim() } : before;
+        [s, b] = [s, b].map((ob, i) => {
+            let m = moment(ob.value, 'DD.MM.YYYY');
+            return {
+                m: m,
+                value: ob.value,
+                parsed: ob.value && m.isValid() ? m.format('DD.MM.YYYY') : Trellos.nbsp,
+                valid: !ob.value || m.isValid()
+            }
+        });
+
+        if (s.m && b.m && s.value && b.value && s.valid && b.valid && s.m > b.m) {
+            s.valid = false;
+            b.valid = false;
+        }
+        setSince(s);
+        setBefore(b);
+        if (props.onChange) props.onChange(s, b);
+    }
+
+    let sinceElId = props.id ? props.id + '-since' : null;
+    let beforeElId = props.id ? props.id + '-before' : null;
+
+    let rProps = Object.assign({}, props);
+    delete rProps['children'];
+    delete rProps['since'];
+    delete rProps['before'];
+    delete rProps['onChange'];
+
+    return e(BS.Row, rProps,
+        e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2 },
+            e(BS.Form.Control, {
+                placeholder: 'от (дд.мм.гггг)', name: 'since',
+                onChange: onChange,
+                isInvalid: !since.valid,
+                // defaultValue: props['since'] || null,
+                id: sinceElId
+            }),
+            e(Trellos.Muted, {}, since.parsed)
+        ),
+        e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2, className: 'pl-0' },
+            e(BS.Form.Control, {
+                placeholder: 'до (дд.мм.гггг)', name: 'before',
+                onChange: onChange,
+                isInvalid: !before.valid,
+                // defaultValue: props['before'] || null,
+                id: beforeElId
+            }),
+            e(Trellos.Muted, {}, before.parsed)
+        )
+    )
+
 }
