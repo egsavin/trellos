@@ -707,13 +707,15 @@ Trellos.Search = function (props) {
 
     const onSearch = async (filter) => {
         if (searchProgress) return;
-        console.log(filter); // TODO: usage since and before
         setSearchProgress(true);
         setSearchResult(null);
 
         let cleanFilter = Object.assign({}, filter);
         let upState = Object.assign({}, filter);
         delete upState.query;
+        delete upState.since;
+        delete upState.before;
+
         props.onUpState('search', upState);
 
         filter.stemQuery = Porter.stemText(filter.query, Trellos.config.minWordLengthToStem);
@@ -737,14 +739,32 @@ Trellos.Search = function (props) {
 
         let searchResult = [];
 
+
+        const momentSince = filter.since ? moment(filter.since) : null;
+        const momentBefore = filter.before ? moment(filter.before) : null;
+        if (momentBefore) {
+            momentBefore.se
+        }
+
         cardsData.forEach(async (cards) => {
             cards.forEach(card => {
                 if (!filter.allowArchive && card.closed) return;
+                let isOk = true;
+                const momentCreated = Trellos.convertTrelloIdToTime(card.id);
+
+                if (momentSince && momentSince.isValid()) {
+                    isOk = momentCreated.isSameOrAfter(momentSince, 'day');
+                }
+                if (isOk && momentBefore && momentBefore.isValid()) {
+                    isOk = momentCreated.isSameOrBefore(momentBefore, 'day');
+                }
+                if (!isOk) return;
+
                 card.stemName = Porter.stemText(card.name, Trellos.config.minWordLengthToStem);
                 card.stemDesc = Porter.stemText(card.desc, Trellos.config.minWordLengthToStem);
                 // search by card name
                 let findedWords = findText(filter.stemQuery, card.stemName) || [];
-                let isOk = filter.allWords ? findedWords.length == filter.stemQuery.length : findedWords.length > 0;
+                isOk = filter.allWords ? findedWords.length == filter.stemQuery.length : findedWords.length > 0;
                 // search by card desc if it needed
                 if (!isOk) {
                     findedWords = Trellos.utils.unionArrays(findedWords, findText(filter.stemQuery, card.stemDesc) || []);
@@ -760,8 +780,10 @@ Trellos.Search = function (props) {
 
         searchResult.sort(filter.sortMode == 'created' ? cardCreatedComparer : cardLastActivityComparer);
         searchResult.hash = btoa(encodeURIComponent(Trellos.utils.rndstr()));
+
+        const linkState = JSON.stringify(cleanFilter);
         searchResult.link = document.location.origin + document.location.pathname +
-            "?search=" + btoa(encodeURIComponent(JSON.stringify(cleanFilter))) +
+            "?search=" + btoa(encodeURIComponent(linkState)) +
             "&tab=search";
         setSearchResult(searchResult);
         setSearchProgress(false);
@@ -914,12 +936,15 @@ Trellos.Search.Result.Head = function (props) {
             Trellos.utils.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
         ),
         e('small', { style: styles.searchLinkBlock },
-            e('input', { id: 'trellos-search-result-link', style: styles.searchLinkInput, defaultValue: props.data.link }),
+            e('input', {
+                id: 'trellos-search-result-link', style: styles.searchLinkInput,
+                value: props.data.link, onChange: (event) => { event.preventDefault(); }
+            }),
             e(Trellos.IconLink, {
                 href: props.data.link, variant: 'far fa-copy',
                 onClick: onCopySearchLink
             }, 'Копировать ссылку на этот поиск'),
-            e('a', { className: 'ml-4 fas fa-external-link-alt', href: props.data.link, target: '_blank' })
+            e('a', { className: 'ml-4 fas fa-external-link-alt', href: props.data.link, target: '_blank' }),
         ),
 
     )
@@ -930,7 +955,10 @@ Trellos.Search.Form = function (props) {
     let [validQuery, setValidQuery] = React.useState(true);
     let [validForm, setValidForm] = React.useState(false);
     let [initState, setInitState] = React.useState(get(Trellos.getInitalState(), 'search', null));
-    let [period, setPeriod] = React.useState({ since: null, before: null });
+    let [period, setPeriod] = React.useState({
+        since: get(initState, 'since', null),
+        before: get(initState, 'before', null)
+    });
 
     React.useEffect(() => { // init effect
         if (get(initState, 'allBoards', false)) setAllBoards(true);
@@ -1099,8 +1127,19 @@ Trellos.IconLink = (props) => {
 
 
 Trellos.Form.Period = function (props) {
-    const [since, setSince] = React.useState({ value: '', parsed: Trellos.nbsp, valid: true });
-    const [before, setBefore] = React.useState({ value: '', parsed: Trellos.nbsp, valid: true });
+    const makeObject = (source) => {
+        const m = moment(source);
+        let ob = {
+            m: m,
+            value: source && m.isValid() ? m.format("DD.MM.YYYY") : null
+        }
+        ob.parsed = ob.value && m.isValid() ? m.format('DD.MM.YYYY') : Trellos.nbsp;
+        ob.valid = !ob.value || m.isValid();
+        return ob;
+    }
+
+    const [since, setSince] = React.useState(makeObject(props.since));
+    const [before, setBefore] = React.useState(makeObject(props.before));
 
     const onChange = (event) => {
         const cName = event.target.name;
@@ -1122,7 +1161,9 @@ Trellos.Form.Period = function (props) {
         }
         setSince(s);
         setBefore(b);
-        if (props.onChange) props.onChange(s, b);
+        if (props.onChange) {
+            props.onChange(s.m.isValid() ? s.m.format("YYYY-MM-DD") : null, b.m.isValid() ? b.m.format("YYYY-MM-DD") : null);
+        }
     }
 
     let sinceElId = props.id ? props.id + '-since' : null;
@@ -1130,9 +1171,9 @@ Trellos.Form.Period = function (props) {
 
     let rProps = Object.assign({}, props);
     delete rProps['children'];
+    delete rProps['onChange'];
     delete rProps['since'];
     delete rProps['before'];
-    delete rProps['onChange'];
 
     return e(BS.Row, rProps,
         e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2 },
@@ -1140,7 +1181,7 @@ Trellos.Form.Period = function (props) {
                 placeholder: 'от (дд.мм.гггг)', name: 'since',
                 onChange: onChange,
                 isInvalid: !since.valid,
-                // defaultValue: props['since'] || null,
+                defaultValue: since.value,
                 id: sinceElId
             }),
             e(Trellos.Muted, {}, since.parsed)
@@ -1150,7 +1191,7 @@ Trellos.Form.Period = function (props) {
                 placeholder: 'до (дд.мм.гггг)', name: 'before',
                 onChange: onChange,
                 isInvalid: !before.valid,
-                // defaultValue: props['before'] || null,
+                defaultValue: before.value,
                 id: beforeElId
             }),
             e(Trellos.Muted, {}, before.parsed)
