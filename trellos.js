@@ -790,6 +790,8 @@ Trellos.Search = function (props) {
             "&tab=search";
         setSearchResult(searchResult);
         setSearchProgress(false);
+
+        if(searchResult.length) console.log(searchResult[0]);
     }
 
     return boards == null ? e(Trellos.Spinner) :
