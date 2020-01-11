@@ -340,15 +340,18 @@ Trellos.Spinner = function (props) {
 
 
 Trellos.Settings = function (props) {
+    const onResetState = (event) => {
+        Trellos.utils.setCookie(Trellos.config.cookieName, null, { 'max-age': -1 });
+        document.location.href = document.location.origin + document.location.pathname;
+    }
+
     return e(BS.Form, null,
         e(BS.Form.Group, null,
             e(Trellos.Settings.Profile, { me: props.me })
         ),
-        // e(BS.Form.Group, null,
-        //     e(BS.Form.Label, null, 'Время кеширования карточек для поиска, секунд'),
-        //     e(BS.Form.Control, { id: 'trellos-settings-cache-time', type: 'number', style: { width: 'unset' } }),
-        //     e(Trellos.Muted, null, 'Если 0, то карточки не кешируются')
-        // )
+        e(BS.Form.Group, null,
+            e(BS.Button, { variant: 'link', className: 'p-0', onClick: onResetState }, 'Сбросить сохраненное состояние')
+        )
     )
 }
 
@@ -580,8 +583,8 @@ Trellos.Export.Form = function (props) {
         e(BS.Button, {
             type: 'submit', disabled: (period && !period.valid) || view == 'progress'
         },
-            view == 'progress' ? e(Trellos.Spinner, { className: 'mr-2' }) : null,
-            'Экспорт в CSV')
+            view == 'progress' ? e(Trellos.Spinner, { className: 'mr-2' }) : null, 'Экспорт в CSV'
+        )
     )
 }
 
@@ -1059,18 +1062,20 @@ Trellos.Search.Form = function (props) {
         e(BS.Form.Group, { className: 'mb-0' }, 'Дата создания'),
         e(BS.Form.Group, null,
             e(Trellos.Form.Period, {
-                since: initState.since,
-                before: initState.before,
+                since: get(initState, 'since', null),
+                before: get(initState, 'before', null),
                 onChange: onChangePeriod
             })
         ),
-        e(BS.Button, {
-            disabled: !validForm || props.inProgress,
-            type: 'submit', size: 'lg', className: 'mt-3 px-4',
-            id: 'trellos-search-form-button'
-        },
-            props.inProgress ? e(Trellos.Spinner, { className: 'mr-2' }) : null,
-            props.inProgress ? 'Поиск…' : 'Найти'
+        e(BS.Form.Group, { className: 'my-4' },
+            e(BS.Button, {
+                disabled: !validForm || props.inProgress,
+                type: 'submit', size: 'lg', className: 'px-4 mr-3',
+                id: 'trellos-search-form-button'
+            },
+                props.inProgress ? e(Trellos.Spinner, { className: 'mr-2' }) : null,
+                props.inProgress ? 'Поиск…' : 'Найти'
+            )
         )
     );
 }
@@ -1147,12 +1152,7 @@ Trellos.Form.Period = function (props) {
         let b = cName == 'before' ? { value: event.target.value.trim() } : before;
         [s, b] = [s, b].map((ob, i) => {
             let m = moment(ob.value, 'DD.MM.YYYY');
-            return {
-                m: m,
-                value: ob.value,
-                parsed: ob.value && m.isValid() ? m.format('DD.MM.YYYY') : Trellos.nbsp,
-                valid: !ob.value || m.isValid()
-            }
+            return makeObject(m);
         });
 
         if (s.m && b.m && s.value && b.value && s.valid && b.valid && s.m > b.m) {
