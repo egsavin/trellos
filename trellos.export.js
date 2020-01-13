@@ -1,5 +1,8 @@
 'use strict'
 
+window['e'] = React.createElement;
+window['BS'] = ReactBootstrap;
+
 // Trellos.Export plugin
 
 Trellos.Export = function (props) {
@@ -92,7 +95,7 @@ Trellos.Export = function (props) {
 
 if (!Trellos.Plugins) Trellos.Plugins = {};
 Trellos.Plugins['export'] = {
-    plugin: Trellos.Export,
+    plugin: (props) => { return e(Trellos.Export, props) },
     tab: (props) => {
         return e(BS.NavItem, {}, e(BS.Nav.Link, { eventKey: 'export' },
             e('i', { className: 'fas fa-file-download d-inline-block d-sm-none mx-2' }),

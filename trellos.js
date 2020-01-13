@@ -2,8 +2,8 @@
 
 window.onload = () => { ReactDOM.render(e(Trellos.App), document.getElementById('trellos')); }
 
-const e = React.createElement;
-const BS = ReactBootstrap;
+window['e'] = React.createElement;
+window['BS']= ReactBootstrap;
 
 
 const get = function (props, name, def) {
@@ -274,24 +274,20 @@ Trellos.App = function (props) {
         Trellos.utils.setCookie(Trellos.config.cookieName, btoa(encodeURIComponent(s)), { 'max-age': Trellos.config.cookieTtl });
     }
 
-    console.log('render app');
     return e(BS.Container, { className: 'my-3' },
         validAuth ? null : e(Trellos.Auth.Form, { onAuth: authorize }),
         me ? e(Trellos.Nav, { activeKey: tab, onChangeTab: onChangeTab }) : null,
-        Object.keys(Trellos.Plugins).map((pName) => {
-            console.log('plugin', pName);
-            return tab == pName ? e(React.Fragment, { key: pName }, Trellos.Plugins[pName].plugin({
-                me: me,
-                onUpState: onUpState
-            })) : null
-        }),
-        // me && tab == 'search' ? e(Trellos.Search, {
-        //     me: me, onUpState: onUpState
-        // }) : null,
-        // me && tab == 'export' ? e(Trellos.Export, { me: me, onUpState: onUpState }) : null,
-        // me && tab == 'settings' ?
-        //     e(React.Fragment, { key: 'settings' }, e(Trellos.Settings, { me: me, onUpState: onUpState }))
-        //     : null
+        me && Object.keys(Trellos.Plugins).length ?
+            Object.keys(Trellos.Plugins).map((pName) => {
+                return tab == pName ? e(React.Fragment, { key: pName }, Trellos.Plugins[pName].plugin({
+                    me: me,
+                    onUpState: onUpState
+                })) : null
+            })
+            : null,
+        me && tab == 'settings' ?
+            e(React.Fragment, { key: 'settings' }, e(Trellos.Settings, { me: me, onUpState: onUpState }))
+            : null
     );
 }
 
@@ -637,7 +633,7 @@ Trellos.Search = function (props) {
 }
 
 Trellos.Plugins['search'] = {
-    plugin: Trellos.Search,
+    plugin: (props) => { return e(Trellos.Search, props) },
     tab: (props) => {
         return e(BS.NavItem, null, e(BS.Nav.Link, { eventKey: 'search' },
             e('i', { className: 'fas fa-search d-inline-block d-sm-none mx-2' }),
