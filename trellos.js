@@ -1,6 +1,6 @@
 'use strict'
 
-window.onload = () => { ReactDOM.render(e(Trellos), document.getElementById('trellos')); }
+window.onload = () => { ReactDOM.render(e(Trellos.App), document.getElementById('trellos')); }
 
 const e = React.createElement;
 const BS = ReactBootstrap;
@@ -13,85 +13,13 @@ const get = function (props, name, def) {
     return props[name];
 }
 
-const Trellos = function (props) {
-    const [validAuth, setValidAuth] = React.useState(false);
-    const [me, setMe] = React.useState(null);
-    const [tab, setTab] = React.useState('search');
-    let [appState, setAppState] = React.useState(null);
+if (!window['Trellos']) window['Trellos'] = {};
 
-    const authorize = function () {
-        window.Trello.authorize({
-            type: 'popup',
-            name: 'Trellos',
-            scope: {
-                read: 'true',
-                write: 'true',
-                account: 'true',
-            },
-            expiration: 'never',
-            success: async () => {
-                try {
-                    window.Trello.get('member/me', { fields: 'id,fullName,url,username' },
-                        (data) => {
-                            setMe(data);
-                        }
-                    );
-                } catch {
-                    delete localStorage['trello_token'];
-                    setValidAuth(false);
-                }
-                setValidAuth(true);
-            },
-            error: () => {
-                delete localStorage['trello_token'];
-                setValidAuth(false);
-            }
-        });
-    }
-
-    const onChangeTab = function (tab) {
-        setTab(tab);
-        if (tab != 'settings') onUpState('tab', tab);
-    }
-
-    React.useEffect(() => {
-        if (!validAuth) {
-            authorize();
-            return
-        }
-    })
-
-    React.useEffect(() => { // init
-        let state = Trellos.getInitalState();
-        setTab(get(state, 'tab', 'search'));
-        setAppState(state);
-    }, [])
-
-    const onUpState = (name, data) => {
-        let s = Object.assign({}, appState || {});
-        s[name] = data;
-        setAppState(s);
-        saveState(s);
-    }
-
-    const saveState = (state) => {
-        if (appState == null && !state) return;
-        let o = Object.assign({}, state || appState);
-        if (o.search && o.search.query) delete o.search.query;
-        const s = JSON.stringify(o);
-        Trellos.utils.setCookie(Trellos.config.cookieName, btoa(encodeURIComponent(s)), { 'max-age': Trellos.config.cookieTtl });
-    }
-
-    return e(BS.Container, { className: 'my-3' },
-        validAuth ? null : e(Trellos.Auth.Form, { onAuth: authorize }),
-        me ? e(Trellos.Nav, { activeKey: tab, onChangeTab: onChangeTab }) : null,
-        me && tab == 'search' ? e(Trellos.Search, {
-            me: me, onUpState: onUpState
-        }) : null,
-        me && tab == 'settings' ? e(Trellos.Settings, { me: me }) : null,
-        me && tab == 'export' ? e(Trellos.Export, { me: me }) : null
-    );
-}
+if (!Trellos.Plugins) Trellos.Plugins = {}; // { name: Plugin }
+/* Module {
+    renderTab: renderProp
+    renderPlugin: renderProp
+} */
 
 
 /* utils */
@@ -277,6 +205,98 @@ Trellos.loadMeBoards = async function (filter) {
 }
 
 
+Trellos.App = function (props) {
+    const [validAuth, setValidAuth] = React.useState(false);
+    const [me, setMe] = React.useState(null);
+    const [tab, setTab] = React.useState('search');
+    let [appState, setAppState] = React.useState(null);
+
+    const authorize = function () {
+        window.Trello.authorize({
+            type: 'popup',
+            name: 'Trellos',
+            scope: {
+                read: 'true',
+                write: 'true',
+                account: 'true',
+            },
+            expiration: 'never',
+            success: async () => {
+                try {
+                    window.Trello.get('member/me', { fields: 'id,fullName,url,username' },
+                        (data) => {
+                            setMe(data);
+                        }
+                    );
+                } catch {
+                    delete localStorage['trello_token'];
+                    setValidAuth(false);
+                }
+                setValidAuth(true);
+            },
+            error: () => {
+                delete localStorage['trello_token'];
+                setValidAuth(false);
+            }
+        });
+    }
+
+    const onChangeTab = function (tab) {
+        setTab(tab);
+        if (tab != 'settings') onUpState('tab', tab);
+    }
+
+    React.useEffect(() => {
+        if (!validAuth) {
+            authorize();
+            return
+        }
+    })
+
+    React.useEffect(() => { // init
+        let state = Trellos.getInitalState();
+        setTab(get(state, 'tab', 'search'));
+        setAppState(state);
+    }, [])
+
+    const onUpState = (name, data) => {
+        let s = Object.assign({}, appState || {});
+        s[name] = data;
+        setAppState(s);
+        saveState(s);
+    }
+
+    const saveState = (state) => {
+        if (appState == null && !state) return;
+        let o = Object.assign({}, state || appState);
+        if (o.search && o.search.query) delete o.search.query;
+        const s = JSON.stringify(o);
+        Trellos.utils.setCookie(Trellos.config.cookieName, btoa(encodeURIComponent(s)), { 'max-age': Trellos.config.cookieTtl });
+    }
+
+    console.log('render app');
+    return e(BS.Container, { className: 'my-3' },
+        validAuth ? null : e(Trellos.Auth.Form, { onAuth: authorize }),
+        me ? e(Trellos.Nav, { activeKey: tab, onChangeTab: onChangeTab }) : null,
+        Object.keys(Trellos.Plugins).map((pName) => {
+            console.log('plugin', pName);
+            return tab == pName ? e(React.Fragment, { key: pName }, Trellos.Plugins[pName].plugin({
+                me: me,
+                onUpState: onUpState
+            })) : null
+        }),
+        // me && tab == 'search' ? e(Trellos.Search, {
+        //     me: me, onUpState: onUpState
+        // }) : null,
+        // me && tab == 'export' ? e(Trellos.Export, { me: me, onUpState: onUpState }) : null,
+        // me && tab == 'settings' ?
+        //     e(React.Fragment, { key: 'settings' }, e(Trellos.Settings, { me: me, onUpState: onUpState }))
+        //     : null
+    );
+}
+
+
+
 Trellos.Back = function (props) {
     const onClick = (event) => {
         event.preventDefault();
@@ -316,14 +336,7 @@ Trellos.Nav = function (props) {
     }
 
     return e(BS.Nav, { onSelect: onSelect, activeKey: props.activeKey, className: 'mb-4', variant: 'tabs' },
-        e(BS.NavItem, {}, e(BS.Nav.Link, { eventKey: 'search' },
-            e('i', { className: 'fas fa-search d-inline-block d-sm-none mx-2' }),
-            e('span', { className: 'd-none d-sm-inline-block' }, 'Поиск')
-        )),
-        e(BS.NavItem, {}, e(BS.Nav.Link, { eventKey: 'export' },
-            e('i', { className: 'fas fa-file-download d-inline-block d-sm-none mx-2' }),
-            e('span', { className: 'd-none d-sm-inline-block' }, 'Экспорт')
-        )),
+        Object.keys(Trellos.Plugins).map(pName => e(React.Fragment, { key: pName }, Trellos.Plugins[pName].tab())),
         e(BS.Nav.Item, {}, e(BS.Nav.Link, { eventKey: 'settings' },
             e('i', { className: 'fas fa-cog d-inline-block d-sm-none mx-2' }),
             e('span', { className: 'd-none d-sm-inline-block' }, 'Настройки')
@@ -373,248 +386,59 @@ Trellos.Settings.Profile = function (props) {
 }
 
 
-Trellos.Export = function (props) {
-    const [board, setBoard] = React.useState(null);
-    const [exportData, setExportData] = React.useState(null);
 
-    const onSelectBoard = (newBoard) => {
-        setBoard(newBoard);
+Trellos.TrelloLabel = (props) => {
+    const styles = {
+        green: { backgroundColor: '#61bd4f66', color: '#666' },
+        yellow: { backgroundColor: '#f2d60066', color: '#666' },
+        orange: { backgroundColor: '#ff9f1a66', color: '#666' },
+        red: { backgroundColor: '#eb5a4666', color: '#666' },
+        purple: { backgroundColor: '#c366e066', color: '#666' },
+        blue: { backgroundColor: '#0079bf66', color: '#666' },
+        sky: { backgroundColor: '#00c2e066', color: '#666' },
+        lime: { backgroundColor: '#51e89866', color: '#666' },
+        pink: { backgroundColor: '#ff78cb66', color: '#666' },
+        black: { backgroundColor: '#35526366', color: '#666' },
+        none: { border: '1px solid #b3bec488', color: 'gray' }
     }
 
-    const onExport = (filter) => {
-        const listOfCard = (card) => {
-            return board.lists.find(l => l.id == card.idList);
-        }
-
-        const dateFilter = (str, addDays) => {
-            let m = moment(str, 'DD.MM.YYYY');
-            if (!m.isValid()) return '';
-            if (addDays) m.add(addDays, 'day');
-            return m.format('YYYY-MM-DD');
-        }
-
-        Trellos.trelloGetRecursive(`boards/${board.id}/cards`, {
-            filter: filter.visibility ? "visible" : "all",
-            fields: "id,name,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity",
-            members: "true",
-            members_fields: "id,fullName,username",
-            since: dateFilter(filter.since),
-            before: dateFilter(filter.before, 1)
-        }).then((data) => {
-            let csv = [[
-                'Card key',
-                'Card name',
-                'Board name',
-                'List name',
-                'Members',
-                'Labels',
-                'Card closed',
-                'List closed',
-                'Board closed',
-                'Card url',
-                'Card last activity',
-                'Card created date',
-                'Card created time',
-                'idCard',
-                'idList',
-                'idBoard'
-            ]];
-            data.map((card, iter) => {
-                if (filter.lists.length && !filter.lists.find(idList => idList == card.idList)) return;
-                const list = listOfCard(card);
-                const created = Trellos.convertTrelloIdToTime(card.id)
-                csv.push([
-                    card.shortLink,
-                    card.name,
-                    board.name,
-                    get(list, 'name', ''),
-                    card.members.map(m => m.fullName).join(','),
-                    card.labels.map(l => l.name || l.color).join(","),
-                    card.closed ? 'closed' : '',
-                    get(list, 'closed', '') ? 'closed' : '',
-                    board.closed ? 'closed' : '',
-                    card.shortUrl,
-                    moment(card.dateLastActivity).format('DD.MM.YYYY HH:MM'),
-                    created.format("DD.MM.YYYY"),
-                    created.format("DD.MM.YYYY HH:mm"),
-                    card.id,
-                    get(list, 'id', ''),
-                    board.id
-                ]);
-            })
-            setExportData(csv);
-        });
-    }
-
-    return e('div', null,
-        e(Trellos.Export.Boards, { idBoard: get(board, 'id'), onChange: onSelectBoard }),
-        Boolean(board) ? e('div', null,
-            e(Trellos.Back, { onClick: () => { setBoard(null); setExportData(null); } },
-                board.name,
-                e('a', { href: board.shortUrl, target: "_blank", className: 'ml-2  text-secondary' },
-                    e('small', { className: 'fab fa-trello' })
-                )
-            ),
-            exportData ? null : e(Trellos.Export.Form, { board: board, onSubmit: onExport }),
-            exportData ? e(Trellos.Export.Download, { board: board, data: exportData }) : null
-        ) : null
-    );
+    let opts = {};
+    Object.assign(opts, props);
+    opts.style = get(styles, props.variant, styles.none);
+    opts.style.borderRadius = "10px";
+    opts.style.fontSize = '0.6rem';
+    opts.className = 'd-inline-block px-2 ' + (opts.className || '');
+    delete opts.variant;
+    return e('span', opts, props.children);
 }
 
-Trellos.Export.Download = function (props) {
-    const csvEscape = function (str) {
-        return '"' + String(str).replace(/"/gmi, '""')
-            .replace(/\t/gmi, ' ')
-            .replace(/[\n\r]/gmi, '')
-            .replace(/&#8203;/gmi, '')
-            + '"';
-    }
+Trellos.IconLink = (props) => {
+    let opts = Object.assign({}, props);
+    opts.className = 'icon-link ' + (opts.className || '');
+    delete opts.variant;
+    delete opts.children;
 
-    const onDownload = (event) => {
-        event.preventDefault();
-        const btn = event.target.closest("button");
-        if (!btn) return;
-        let text = props.data.map(row => {
-            return row.map(cell => {
-                return csvEscape(cell)
-            }).join(btn.id == 'trellos-export-semicolon' ? ';' : ',');
-        }).join("\n");
-        text = '\ufeff' + text; // UTF-8 BOM
-        Trellos.utils.downloadAsFile(`export-${props.board.name.toLowerCase()}.csv`, text);
-    }
-
-    return e('div', { style: { lineHeight: '3rem' } },
-        e('div', { className: 'mb-2' },
-            e('i', { className: 'fas fa-file-download mr-2 text-muted', style: { fontSize: '1.6rem' } }),
-            (`${props.data.length - 1} ` + Trellos.utils.declOfNum(props.data.length - 1, ['карточка', 'карточки', 'карточек']))
-        ),
-        e(BS.Button, { variant: "outline-primary", className: 'mr-2', onClick: onDownload, id: "trellos-export-semicolon" },
-            e('i', { className: 'far fa-file-excel mr-1', style: { fontSize: '1.3rem', verticalAlign: 'middle' } }), `export-${props.board.name.toLowerCase()}.csv`),
-        e(BS.Button, { variant: "outline-primary", id: "trellos-export-comma", onClick: onDownload },
-            e('i', { className: 'far fa-file-alt mr-1', style: { fontSize: '1.3rem', verticalAlign: 'middle' } }), `export-${props.board.name.toLowerCase()}.csv`),
-    )
-}
-
-Trellos.Export.Boards = function (props) {
-    const [boards, setBoards] = React.useState(null);
-
-    React.useEffect(() => {
-        if (boards !== null) return; // boards are already loaded
-
-        Trellos.loadMeBoards().then(data => {
-            setBoards(data.sort((a, b) => {
-                let alpha = [a.name, b.name].sort();
-                let closed = 0;
-                if (a.closed && !b.closed) closed = 1;
-                if (!a.closed && b.closed) closed = -1;
-                return closed === 0 ? alpha : closed;
-            }))
-        })
-    });
-
-    const onSelect = (key) => {
-        if (key != props.idBoard) props.onChange(boards.find(b => b.id == key));
-    }
-
-    // ----
-    if (props.idBoard) return null; // hide when has selected
-
-    return e('div', null,
-        boards == null ? e(Trellos.Spinner) : null,
-        boards != null ?
-            e(BS.Nav, { activeKey: props.idBoard, className: 'flex-column', onSelect: onSelect },
-                boards.map(board => {
-                    return e(BS.Nav.Item, { key: board.id },
-                        e(BS.Nav.Link, {
-                            eventKey: board.id,
-                            className: (board.closed ? 'text-secondary' : null) + ' pl-0 pt-0'
-                        }, board.name)
-                    )
-                })
-            ) : null
-    );
-}
-
-Trellos.Export.Form = function (props) {
-    const [visibility, setVisibility] = React.useState(true);
-    const [period, setPeriod] = React.useState(null);
-    const [view, setView] = React.useState('form');
-
-    const onChangePeriod = (since, before) => {
-        setPeriod({ since: since, before: before, valid: since && before && since.valid && before.valid });
-    }
-
-    const onSubmit = (event) => {
-        const pdate = (ctrl, name) => {
-            if (!ctrl || !ctrl[name]) return '';
-            return String(ctrl[name].value);
-        }
-
-        event.preventDefault();
-        setView('progress');
-
-        let domLists = document.querySelectorAll("input[name='trellos-export-list']:checked"
-            + (visibility ? ":not(:disabled)" : ""));
-
-        let e = {
-            visibility: visibility,
-            since: pdate(period, 'since'),
-            before: pdate(period, 'before'),
-            lists: !domLists ? [] : Array.from(domLists).map(l => l.id)
-        }
-        props.onSubmit(e);
-    }
-
-    return e(BS.Form, { onSubmit: onSubmit },
-        e(BS.FormGroup, null,
-            e(BS.Form.Check, {
-                inline: true, id: "visible-cards", label: "Видимые карточки",
-                type: 'radio', name: 'visibility', defaultChecked: true,
-                onClick: () => { setVisibility(true) }
-            }),
-            e(BS.Form.Check, {
-                inline: true, id: "all-cards", label: "Все карточки",
-                type: 'radio', name: 'visibility',
-                onClick: () => { setVisibility(false) }
-            })
-        ),
-        e(Trellos.Export.Form.Lists, { board: props.board, onlyVisible: visibility }),
-        e(Trellos.Export.Form.Period, { onChange: onChangePeriod }),
-        e(BS.Button, {
-            type: 'submit', disabled: (period && !period.valid) || view == 'progress'
-        },
-            view == 'progress' ? e(Trellos.Spinner, { className: 'mr-2' }) : null, 'Экспорт в CSV'
-        )
-    )
-}
-
-Trellos.Export.Form.Lists = function (props) {
-    return e(BS.Form.Group, null,
-        props.board.lists
-            .sort((a, b) => {
-                let s = 0;
-                if (a.closed && !b.closed) return 1;
-                if (b.closed && !a.closed) return -1;
-            }).map((list) => {
-                if (props.onlyVisible && list.closed) return null;
-                return e(BS.Form.Check, {
-                    key: list.id,
-                    label: list.name,
-                    type: 'checkbox',
-                    id: list.id,
-                    className: (list.closed ? 'text-muted' : null) + ' mb-1',
-                    name: 'trellos-export-list'
-                })
-            }),
-        e(Trellos.Muted, null, 'Если списки не выбраны, то выгружается всё')
+    return e('a', opts,
+        e('span', { className: `mr-1 ${props.variant}` }),
+        props.children
     )
 }
 
 
-Trellos.Export.Form.Period = function (props) {
-    const [since, setSince] = React.useState({ value: '', parsed: Trellos.nbsp, valid: true });
-    const [before, setBefore] = React.useState({ value: '', parsed: Trellos.nbsp, valid: true });
-    const [periodValid, setPeriodValid] = React.useState(true);
+Trellos.Form.Period = function (props) {
+    const makeObject = (source) => {
+        const m = moment(source);
+        let ob = {
+            m: m,
+            value: source && m.isValid() ? m.format("DD.MM.YYYY") : null
+        }
+        ob.parsed = ob.value && m.isValid() ? m.format('DD.MM.YYYY') : Trellos.nbsp;
+        ob.valid = !ob.value || m.isValid();
+        return ob;
+    }
+
+    const [since, setSince] = React.useState(makeObject(props.since));
+    const [before, setBefore] = React.useState(makeObject(props.before));
 
     const onChange = (event) => {
         const cName = event.target.name;
@@ -622,12 +446,7 @@ Trellos.Export.Form.Period = function (props) {
         let b = cName == 'before' ? { value: event.target.value.trim() } : before;
         [s, b] = [s, b].map((ob, i) => {
             let m = moment(ob.value, 'DD.MM.YYYY');
-            return {
-                m: m,
-                value: ob.value,
-                parsed: ob.value && m.isValid() ? m.format('DD.MM.YYYY') + (i > 0 ? ' 23:59:59' : '') : Trellos.nbsp,
-                valid: !ob.value || m.isValid()
-            }
+            return makeObject(m);
         });
 
         if (s.m && b.m && s.value && b.value && s.valid && b.valid && s.m > b.m) {
@@ -636,30 +455,46 @@ Trellos.Export.Form.Period = function (props) {
         }
         setSince(s);
         setBefore(b);
-        props.onChange(s, b);
+        if (props.onChange) {
+            props.onChange(s.m.isValid() ? s.m.format("YYYY-MM-DD") : null, b.m.isValid() ? b.m.format("YYYY-MM-DD") : null);
+        }
     }
 
-    return e(BS.Form.Group, {},
-        e(BS.Row, null,
-            e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2 },
-                e(BS.Form.Control, {
-                    placeholder: 'от (дд.мм.гггг)', name: 'since',
-                    onChange: onChange,
-                    isInvalid: !since.valid
-                }),
-                e(Trellos.Muted, {}, since.parsed)
-            ),
-            e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2, className: 'pl-0' },
-                e(BS.Form.Control, {
-                    placeholder: 'до (дд.мм.гггг)', name: 'before',
-                    onChange: onChange,
-                    isInvalid: !before.valid
-                }),
-                e(Trellos.Muted, {}, before.parsed)
-            )
+    let sinceElId = props.id ? props.id + '-since' : null;
+    let beforeElId = props.id ? props.id + '-before' : null;
+
+    let rProps = Object.assign({}, props);
+    delete rProps['children'];
+    delete rProps['onChange'];
+    delete rProps['since'];
+    delete rProps['before'];
+
+    return e(BS.Row, rProps,
+        e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2 },
+            e(BS.Form.Control, {
+                placeholder: 'от (дд.мм.гггг)', name: 'since',
+                onChange: onChange,
+                isInvalid: !since.valid,
+                defaultValue: since.value,
+                id: sinceElId
+            }),
+            e(Trellos.Muted, {}, since.parsed)
+        ),
+        e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2, className: 'pl-0' },
+            e(BS.Form.Control, {
+                placeholder: 'до (дд.мм.гггг)', name: 'before',
+                onChange: onChange,
+                isInvalid: !before.valid,
+                defaultValue: before.value,
+                id: beforeElId
+            }),
+            e(Trellos.Muted, {}, before.parsed)
         )
     )
+
 }
+
+/* SEARCH PLUGIN ******************** */
 
 
 Trellos.Search = function (props) {
@@ -790,8 +625,6 @@ Trellos.Search = function (props) {
             "&tab=search";
         setSearchResult(searchResult);
         setSearchProgress(false);
-
-        if(searchResult.length) console.log(searchResult[0]);
     }
 
     return boards == null ? e(Trellos.Spinner) :
@@ -802,6 +635,16 @@ Trellos.Search = function (props) {
             !searchProgress && searchResult ? e(Trellos.Search.Result, { data: searchResult }) : null
         );
 }
+
+Trellos.Plugins['search'] = {
+    plugin: Trellos.Search,
+    tab: (props) => {
+        return e(BS.NavItem, null, e(BS.Nav.Link, { eventKey: 'search' },
+            e('i', { className: 'fas fa-search d-inline-block d-sm-none mx-2' }),
+            e('span', { className: 'd-none d-sm-inline-block' }, 'Поиск')
+        ))
+    }
+};
 
 Trellos.Search.Result = function (props) {
     const [page, setPage] = React.useState(0);
@@ -1082,32 +925,6 @@ Trellos.Search.Form = function (props) {
     );
 }
 
-Trellos.TrelloLabel = (props) => {
-    const styles = {
-        green: { backgroundColor: '#61bd4f66', color: '#666' },
-        yellow: { backgroundColor: '#f2d60066', color: '#666' },
-        orange: { backgroundColor: '#ff9f1a66', color: '#666' },
-        red: { backgroundColor: '#eb5a4666', color: '#666' },
-        purple: { backgroundColor: '#c366e066', color: '#666' },
-        blue: { backgroundColor: '#0079bf66', color: '#666' },
-        sky: { backgroundColor: '#00c2e066', color: '#666' },
-        lime: { backgroundColor: '#51e89866', color: '#666' },
-        pink: { backgroundColor: '#ff78cb66', color: '#666' },
-        black: { backgroundColor: '#35526366', color: '#666' },
-        none: { border: '1px solid #b3bec488', color: 'gray' }
-    }
-
-    let opts = {};
-    Object.assign(opts, props);
-    opts.style = get(styles, props.variant, styles.none);
-    opts.style.borderRadius = "10px";
-    opts.style.fontSize = '0.6rem';
-    opts.className = 'd-inline-block px-2 ' + (opts.className || '');
-    delete opts.variant;
-    return e('span', opts, props.children);
-}
-
-
 Trellos.Search.MarkedText = (props) => {
     let words = props.words || [];
     let regstr = "([a-zA-Zа-яА-ЯёЁ]*(" +
@@ -1118,86 +935,4 @@ Trellos.Search.MarkedText = (props) => {
     if (props.replaceNewline) html = html.replace(/\n/gm, '<br>');
     html = html.replace(r, '<mark>$1</mark>')
     return e('span', { dangerouslySetInnerHTML: { __html: html } });
-}
-
-Trellos.IconLink = (props) => {
-    let opts = Object.assign({}, props);
-    opts.className = 'icon-link ' + (opts.className || '');
-    delete opts.variant;
-    delete opts.children;
-
-    return e('a', opts,
-        e('span', { className: `mr-1 ${props.variant}` }),
-        props.children
-    )
-}
-
-
-Trellos.Form.Period = function (props) {
-    const makeObject = (source) => {
-        const m = moment(source);
-        let ob = {
-            m: m,
-            value: source && m.isValid() ? m.format("DD.MM.YYYY") : null
-        }
-        ob.parsed = ob.value && m.isValid() ? m.format('DD.MM.YYYY') : Trellos.nbsp;
-        ob.valid = !ob.value || m.isValid();
-        return ob;
-    }
-
-    const [since, setSince] = React.useState(makeObject(props.since));
-    const [before, setBefore] = React.useState(makeObject(props.before));
-
-    const onChange = (event) => {
-        const cName = event.target.name;
-        let s = cName == 'since' ? { value: event.target.value.trim() } : since;
-        let b = cName == 'before' ? { value: event.target.value.trim() } : before;
-        [s, b] = [s, b].map((ob, i) => {
-            let m = moment(ob.value, 'DD.MM.YYYY');
-            return makeObject(m);
-        });
-
-        if (s.m && b.m && s.value && b.value && s.valid && b.valid && s.m > b.m) {
-            s.valid = false;
-            b.valid = false;
-        }
-        setSince(s);
-        setBefore(b);
-        if (props.onChange) {
-            props.onChange(s.m.isValid() ? s.m.format("YYYY-MM-DD") : null, b.m.isValid() ? b.m.format("YYYY-MM-DD") : null);
-        }
-    }
-
-    let sinceElId = props.id ? props.id + '-since' : null;
-    let beforeElId = props.id ? props.id + '-before' : null;
-
-    let rProps = Object.assign({}, props);
-    delete rProps['children'];
-    delete rProps['onChange'];
-    delete rProps['since'];
-    delete rProps['before'];
-
-    return e(BS.Row, rProps,
-        e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2 },
-            e(BS.Form.Control, {
-                placeholder: 'от (дд.мм.гггг)', name: 'since',
-                onChange: onChange,
-                isInvalid: !since.valid,
-                defaultValue: since.value,
-                id: sinceElId
-            }),
-            e(Trellos.Muted, {}, since.parsed)
-        ),
-        e(BS.Col, { xs: 6, sm: 5, md: 3, lg: 2, className: 'pl-0' },
-            e(BS.Form.Control, {
-                placeholder: 'до (дд.мм.гггг)', name: 'before',
-                onChange: onChange,
-                isInvalid: !before.valid,
-                defaultValue: before.value,
-                id: beforeElId
-            }),
-            e(Trellos.Muted, {}, before.parsed)
-        )
-    )
-
 }
