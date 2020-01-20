@@ -35,6 +35,19 @@ trellos.plugins = [];
 
 
 
+trellos.g = (props, name, def) => {
+    if (props == null || props == undefined) return def;
+    if (typeof (props) != 'object') return def;
+    if (!props.hasOwnProperty(name)) return def;
+    return props[name];
+}
+
+
+trellos.rndstr = () => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+
 trellos.getCookie = (name) => {
     let matches = document.cookie.match(new RegExp(
         "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
@@ -334,4 +347,73 @@ Trellos.Spinner = function (props) {
     let opts = Object.assign({}, props);
     Object.assign(opts, { variant: 'dark', size: 'sm', animation: 'border' });
     return e(BS.Spinner, opts);
+}
+
+
+
+
+Trellos.Form = (props) => null;
+
+
+Trellos.Form.DateControl = (props) => {
+    const defaultName = 'trellos-date-' + trellos.rndstr();
+    const [value, setValue] = React.useState(null);
+    const [isEmpty, setIsEmpty] = React.useState(true);
+
+    React.useEffect(() => { // init
+        if (props.defaultValue) updateValue(props.defaultValue);
+    }, [])
+
+    const updateValue = (text) => {
+        text = text.trim();
+        const parseFormat = trellos.g(props, 'parseFormat', 'DD.MM.YYYY');
+        const mdate = moment(text, parseFormat);
+        setIsEmpty(text.length == 0);
+        setValue(mdate);
+        return mdate;
+    }
+
+    const onChange = (text) => {
+        const mdate = updateValue(text)
+        if (props.onChange) props.onChange(mdate);
+    }
+
+    const parsedValue = () => {
+        if (!value || !value.isValid()) return '';
+        const showFormat = trellos.g(props, 'showFormat', 'DD.MM.YYYY');
+        return value.format(showFormat);
+    }
+
+    const isValid = () => {
+        const autoInvalid = trellos.g(props, 'autoInvalid', true);
+        if (!autoInvalid) return props.isValid != undefined ? Boolean(props.isValid) : null;
+        if (autoInvalid && isInvalid()) return null;
+        if (!isEmpty && value != null && value.isValid()) return true;
+        return null;
+    }
+
+    const isInvalid = () => {
+        let invalid = props.isInvalid != undefined ? Boolean(props.isInvalid) : false;
+        if (!trellos.g(props, 'autoInvalid', true)) return invalid;
+        if (trellos.g(props, 'emptyIsValid', true) && isEmpty) return false;
+        return value == null || !value.isValid();
+    }
+
+    return e(React.Fragment, { key: `input-${props.name || defaultName}` },
+        e(BS.Form.Control, {
+            placeholder: props.placeholder || '',
+            name: props.name || defaultName,
+            onChange: (event) => onChange(event.target.value),
+            isValid: isValid(),
+            isInvalid: isInvalid(),
+            defaultValue: props.defaultValue,
+            id: props.id || defaultName
+        }),
+        trellos.g(props, 'showParsed', true) ? e(Trellos.Muted, {}, parsedValue()) : null
+    )
+}
+
+
+Trellos.Form.PeriodControl = (props) => {
+    
 }
