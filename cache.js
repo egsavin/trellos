@@ -121,7 +121,7 @@ class ObjectStorage /* extends Storage */ {
     // returns key name by keyIndex
     key(keyIndex) {
         let i = parseInt(keyIndex);
-        if (i >= this._keys.length) return null;
+        if (i < 0 || i >= this._keys.length) return null;
         return this._keys[i].key;
     }
 
