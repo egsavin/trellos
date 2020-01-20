@@ -10,11 +10,9 @@
 </head>
 
 <body>
-    <div id="trellos">
+    <div id="trellos" class="container my-3">
         <span class="spinner-border spinner-border-sm"></span>
-        <noscript>
-            <div class="container alert alert-danger">This page needs JavaScript to working</div>
-        </noscript>
+        <noscript>This page needs JavaScript to working</noscript>
     </div>
     <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
     <script>$.noConflict();</script>
@@ -28,8 +26,10 @@
     <script src="https://unpkg.com//moment@2.24.0/moment.js"></script>
     <script src="russianstemmer.js"></script>
     <script src="cache.js"></script>
-    <script src="trellos.js?rand=48B3BA70-6B1C-4212-9794-083B29230365"></script>
-    <script src="trellos.export.js?rand=48B3BA70-6B1C-4212-9794-083B29230365"></script>
+    <script src="trellos.js?rand=27D121C7-612E-4ED9-BEA0-6CF1857DA9A2"></script>
+    <script src="trellos.search.js?rand=27D121C7-612E-4ED9-BEA0-6CF1857DA9A2"></script>
+    <script src="trellos.export.js?rand=27D121C7-612E-4ED9-BEA0-6CF1857DA9A2"></script>
+    <script>window.onload = () => { trellos(document.getElementById('trellos')) }</script>
 </body>
 
 </html>

@@ -6,9 +6,8 @@ class Cache {
     constructor(opts) {
         this.defaultTtl = Cache.p(opts, 'defaultTtl', 1000 * 60 * 5); // ms
         this.gc = Cache.p(opts, 'gc', true); // enable garbage collector
-        this.gcInterval = Cache.p(opts, 'gcInterval', 1000 * 60 * 1);  // ms (interfal of garbage collection)
+        this.gcInterval = Cache.p(opts, 'gcInterval', 1000 * 60 * 10);  // ms (interfal of garbage collection)
         this.storage = Cache.p(opts, 'storage', window.sessionStorage);
-        // this.sign = Math.random().toString(36).substring(2, 15);
         if (this.defaultTtl < 0) this.defaultTtl = 0;
         let gc = _cache_gc.bind(this);
         if (this.gcInterval > 0) this._gcInterval = setInterval(gc, this.gcInterval);
