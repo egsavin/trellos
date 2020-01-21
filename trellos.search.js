@@ -121,7 +121,7 @@ Trellos.Search.doSearch = async (me, filter) => {
     ctx.momentSince = ctx.since ? moment(ctx.since) : null;
     ctx.momentBefore = ctx.before ? moment(ctx.before) : null;
 
-    allCards.forEach((card) => {
+    allCards.forEach(card => {
         if (!ctx.allowArchive && card.closed) return;
         let isOk = true;
         card.momentCreated = trellos.convertTrelloIdToMoment(card.id);
