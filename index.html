@@ -29,7 +29,11 @@
     <script src="trellos.js?rand=27D121C7-612E-4ED9-BEA0-6CF1857DA9A2"></script>
     <script src="trellos.search.js?rand=27D121C7-612E-4ED9-BEA0-6CF1857DA9A2"></script>
     <script src="trellos.export.js?rand=27D121C7-612E-4ED9-BEA0-6CF1857DA9A2"></script>
-    <script>window.onload = () => { trellos(document.getElementById('trellos')) }</script>
+    <script>
+        trellos.plugins.add(Trellos.Search);
+        trellos.plugins.add(Trellos.Export);
+        trellos(document.getElementById('trellos'));
+    </script>
 </body>
 
 </html>

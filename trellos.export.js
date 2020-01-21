@@ -15,9 +15,8 @@ Trellos.Export.PluginTab = (props) => {
     ))
 }
 
-// register plugin
-trellos.plugins.push({
+Trellos.Export.plugin = {
     name: 'export',
     tab: Trellos.Export.PluginTab,
     body: Trellos.Export
-});
+}

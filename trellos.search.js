@@ -24,11 +24,11 @@ Trellos.Search = (props) => {
 
     return e(React.Fragment, { key: 'trellos-search' },
         e(Trellos.Search.Form, {
+            ...props,
             onSubmit: onSearch,
             inProgress: searchProgress,
-            ...props
         }),
-        // !searchProgress && searchResult ? e(Trellos.Search.Result, { data: searchResult }) : null
+        searchProgress || !searchResult ? null : e(Trellos.Search.Result, { data: searchResult, ...props })
     );
 }
 
@@ -41,12 +41,12 @@ Trellos.Search.PluginTab = (props) => {
 }
 
 
-// register plugin
-trellos.plugins.push({
+Trellos.Search.plugin = {
     name: 'search',
     tab: Trellos.Search.PluginTab,
     body: Trellos.Search
-});
+}
+
 
 Trellos.Search.config = {
     minWordLengthToStem: 4,
@@ -375,4 +375,169 @@ Trellos.Search.Form = function (props) {
             )
         )
     );
+}
+
+
+Trellos.Search.Result = function (props) {
+    const [page, setPage] = React.useState(0);
+    const [hash, setHash] = React.useState(null);
+
+    const onChangePage = (pageIndex) => {
+        if (pageIndex == page) return;
+        setPage(pageIndex);
+        document.getElementById('trellos-search-result')
+            .scrollIntoView({ block: "start", behavior: "smooth", inline: "nearest" });
+    }
+
+    React.useEffect(() => {
+        if (hash != props.data.hash) {
+            setPage(0)
+            setHash(props.data.hash)
+        }
+    });
+
+    const dataPage = props.data.slice(page * Trellos.config.searchPageSize, (page + 1) * Trellos.config.searchPageSize)
+    let pageCount = Math.ceil(props.data.length / Trellos.config.searchPageSize);
+    let pages = [];
+    for (let i = 0; i < pageCount; i++) {
+        pages.push(e(BS.Pagination.Item, { key: i, active: i == page, onClick: () => { onChangePage(i) } }, `${i + 1}`));
+        if (i == 9) {
+            pages.push(e(BS.Pagination.Ellipsis, { key: '...' }))
+            break;
+        }
+    }
+
+    return e('div', { className: 'mt-4', id: 'trellos-search-result' },
+        e(Trellos.Search.Result.Head, { data: props.data }),
+        dataPage.map((card, i) => e(Trellos.Search.Result.Card, {
+            key: card.id,
+            card: card,
+            index: page * Trellos.config.searchPageSize + i
+        })),
+        e(BS.Pagination, null,
+            pages.length > 1 ? pages : null
+        ),
+        pageCount > 10 ? e(Trellos.Muted, null, 'Показаны первые 10 страниц') : null
+    );
+}
+
+Trellos.Search.Result.Card = function (props) {
+    const toggleDescr = (event) => {
+        const link = event.target.closest('a');
+        if (!link) return;
+        const idCard = link.getAttribute('card');
+        if (!idCard) return;
+        event.preventDefault();
+        const cardDesc = document.querySelector(`.trellos-card-desc[card="${idCard}"]`);
+        if (!cardDesc) return;
+        if (cardDesc.getAttribute('opened')) {
+            cardDesc.removeAttribute('opened');
+            cardDesc.style.maxHeight = "10rem";
+            link.innerHTML = "Развернуть";
+        } else {
+            cardDesc.setAttribute('opened', "true");
+            cardDesc.style.maxHeight = null;
+            link.innerHTML = "Свернуть"
+        }
+        document.querySelector(`.trellos-card[card="${idCard}"]`)
+            .scrollIntoView({ block: "start", behavior: "smooth", inline: "nearest" });
+    }
+
+
+    const styles = {
+        cardCreatedAt: {
+            fontSize: '60%'
+        }
+    }
+
+    return e(BS.Card, { className: 'mb-5 trellos-card', card: props.card.id }, e(BS.Card.Body, null,
+        e(BS.Card.Text, { className: 'text-secondary' },
+            e('small', { className: 'mr-3' },
+                e('b', { className: 'mr-3' }, props.index + 1),
+                e('span', { className: 'mr-3' },
+                    e('span', { title: 'Доска' }, props.card.board.name), ' / ',
+                    e('span', { title: 'Список' }, props.card.list.name)
+                ),
+                props.card.labels.map(label => {
+                    return e(Trellos.TrelloLabel, { key: label.id + Trellos.utils.rndstr(), variant: label.color, className: 'mr-1' }, label.name)
+                })
+            ),
+            e('span', { className: "text-muted", title: "Время создания", style: styles.cardCreatedAt },
+                Trellos.convertTrelloIdToTime(props.card.id).format('DD.MM.YYYY hh:mm')
+            )
+        ),
+        e(BS.Card.Subtitle, null,
+            e(Trellos.Search.MarkedText, { words: props.card.finded }, props.card.name),
+            e('a', { className: 'text-secondary ml-3 fab fa-trello', target: '_blank', href: props.card.shortUrl })
+        ),
+        e(BS.Card.Text, { className: 'text-secondary mt-2', style: { fontSize: "0.8rem" } },
+            e('span', { className: 'mb-1 trellos-card-desc d-block', card: props.card.id, style: { overflow: 'hidden', maxHeight: "10rem" } },
+                e(Trellos.Search.MarkedText, { words: props.card.finded, replaceNewline: true }, props.card.desc)
+            ),
+            e(Trellos.Muted, { className: 'mr-2' }, props.index + 1),
+            e('a', { href: "#", card: props.card.id, onClick: toggleDescr }, 'Развернуть'),
+        )
+    ))
+}
+
+Trellos.Search.Result.Head = function (props) {
+    const styles = {
+        searchLinkBlock: { display: 'inline-block' },
+        searchLinkInput: {
+            padding: 0,
+            width: '1px',
+            fontSize: '1px',
+            display: 'inline',
+            border: 'none',
+            color: 'transparent',
+            backgroundColor: 'transparent'
+        }
+    }
+
+    const onCopySearchLink = (event) => {
+        event.preventDefault();
+        const inp = document.getElementById('trellos-search-result-link');
+        inp.focus();
+        inp.select();
+        document.execCommand("copy");
+        const btn = event.target.closest('a');
+        btn.className += ' text-success';
+        inp.blur();
+        setTimeout(function () {
+            btn.className = btn.className.replace(/ text-success/, '');
+        }, 1500);
+    }
+
+    if (!props.data.length) return e(BS.Alert, { variant: 'secondary' }, 'Ничего не найдено')
+    return e('div', { className: 'mb-4' },
+        e(Trellos.Muted, { className: 'mr-5' },
+            Trellos.utils.declOfNum(props.data.length, ["Найдена", "Найдено", "Найдено"]),
+            ` ${props.data.length} `,
+            Trellos.utils.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
+        ),
+        e('small', { style: styles.searchLinkBlock },
+            e('input', {
+                id: 'trellos-search-result-link', style: styles.searchLinkInput,
+                value: props.data.link, onChange: (event) => { event.preventDefault(); }
+            }),
+            e(Trellos.IconLink, {
+                href: props.data.link, variant: 'far fa-copy',
+                onClick: onCopySearchLink
+            }, 'Копировать ссылку на этот поиск'),
+            e('a', { className: 'ml-4 fas fa-external-link-alt', href: props.data.link, target: '_blank' }),
+        ),
+
+    )
+}
+
+Trellos.Search.MarkedText = (props) => {
+    let words = props.words || [];
+    let regstr = "([a-zA-Zа-яА-ЯёЁ]*(" +
+        words.join("|")
+        + ")[a-zA-Zа-яА-ЯёЁ]*)";
+    const r = new RegExp(regstr, "gmi");
+    let html = props.children;
+    if (props.replaceNewline) html = html.replace(/\n/gm, '<br>');
+    html = html.replace(r, '<mark>$1</mark>')
+    return e('span', { dangerouslySetInnerHTML: { __html: html } });
 }

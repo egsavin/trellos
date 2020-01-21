@@ -28,6 +28,23 @@ trellos.plugins = [];
     body: name of React.Component
 } */
 
+trellos.plugins.add = (plugin) => {
+    const isPlugin = (p) => plugin && plugin.name && plugin.body && plugin.hasOwnProperty('tab');
+
+    let ok = isPlugin(plugin);
+    if (!ok && plugin && plugin.plugin) {
+        plugin = plugin.plugin;
+        ok = isPlugin(plugin)
+    }
+    if (!ok) return false;
+
+    const already = trellos.plugins.find(p => p.name == plugin.name);
+    if (already) return false;
+    
+    trellos.plugins.push(plugin);
+    return true;
+}
+
 
 
 
