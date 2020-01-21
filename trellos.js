@@ -14,10 +14,6 @@ trellos.nbsp = '\u00A0';
 
 trellos.config = {
     meCacheTtl: 1000 * 60 * 5,
-    minWordLengthToStem: 4,
-    minQueryLength: 2,
-    searchCacheTtl: 1000 * 60,
-    searchPageSize: 30,
     cookieName: 'trellosjs2',
     cookieTtl: 60 * 60 * 24 * 365
 }
@@ -99,7 +95,9 @@ trellos.me = async (force = false) => {
     try {
         me = await window.Trello.get('member/me', {
             fields: 'id,fullName,url,username,initials',
-            boards: 'all'
+            boards: 'all',
+            board_fields: 'id,name,closed,starred,shortUrl',
+            board_lists: 'all'
         });
     } catch {
         delete localStorage['trello_token'];
@@ -172,6 +170,46 @@ trellos.validatePeriod = (since, before, options = {}) => {
     }
 
     return [validSince, validBefore];
+}
+
+
+trellos.getRecursive = async (path, parameters = {}, chunkCallback = null) => {
+    let allData = []; // контейнер для результатов
+    let chunkIndex = 0;
+
+    // функция загрузки
+    const recursiveLoad = async (before) => {
+        // Трелло возвращает не больше 1000 объектов
+        let prms = {
+            ...parameters,
+            before: before, // 'before' используем для смещения в "прошлое"
+            limit: 1000 // max лимит трелло
+        }
+        const data = await window.Trello.get(path, prms); // получаю чанк
+        if (data.length > 0) { // если есть результаты
+            allData = allData.concat(data);
+            // все объекты Трелло имеют поле id. Нахожу минимальный
+            let minId = data.map(x => x.id).reduce((p, n) => n < p ? n : p);
+            if (minId) {
+                if (chunkCallback) chunkCallback(chunkIndex, data, allData.length);
+                chunkIndex++;
+                // загружая следующий чанк. Передаю minId, он будет использован как условие before
+                await recursiveLoad(minId);
+            }
+        } else {
+            // если результаты пустые, то конец рекурсии
+        }
+    }
+    // ---------------
+
+    await recursiveLoad(parameters.before || ""); // запуск
+    return allData;
+}
+
+
+trellos.convertTrelloIdToMoment = function (trelloId) {
+    return moment(1000 * parseInt(trelloId.substring(0, 8), 16));
+    // https://help.trello.com/article/759-getting-the-time-a-card-or-board-was-created
 }
 
 
@@ -316,6 +354,11 @@ Trellos.Footer = (props) => {
         setOpened(!opened);
     }
 
+    const styles = {
+        modalHeader: {
+            borderBottom: 0
+        }
+    }
 
     return e(React.Fragment, null,
         e('hr', { className: 'mt-5 mb-1' }),
@@ -324,8 +367,11 @@ Trellos.Footer = (props) => {
             onClick: onToggleSettings, className: 'text-secondary'
         }),
         e(BS.Modal, { show: opened, onHide: onToggleSettings, animation: false },
-            e(BS.Modal.Body, null,
+            e(BS.Modal.Header, { closeButton: true, style: styles.modalHeader },
                 e(Trellos.Profile, props)
+            ),
+            e(BS.Modal.Body, { className: 'p-1' },
+                // e(Trellos.Profile, props)
             )
         )
     )
@@ -339,8 +385,8 @@ Trellos.Profile = (props) => {
     }
 
     return e('div', null,
-        e(Trellos.FA, { var: 'user', className: 'mr-1 text-muted' }),
-        e('a', { href: props.me.url, target: '_blank', className: 'mr-2' }, props.me.username),
+        e(Trellos.FA, { var: 'user', className: 'mr-1 text-muted align-middle' }),
+        e('a', { href: props.me.url, target: '_blank', className: 'mr-2 align-middle' }, props.me.username),
         e('a', { href: '#logout', onClick: onLogout, className: 'btn-outline-danger btn btn-sm' }, 'Отключиться от Trello')
     )
 }
