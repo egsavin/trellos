@@ -17,7 +17,6 @@ Trellos.Search = (props) => {
     }
 
     const onSearchFinished = (result) => {
-        console.log('finished', result.length);
         setSearchProgress(false);
         setSearchResult(result);
     }
@@ -165,14 +164,21 @@ Trellos.Search.doSearch = async (me, filter) => {
 
 
 Trellos.Search.Form = function (props) {
+    const firstTime = (newValue = undefined) => {
+        if (newValue !== undefined) Trellos.Search.firstTime = newValue;
+        return trellos.g(Trellos.Search, 'firstTime', true);
+    }
+
     const initial = trellos.g(trellos.initialState(), 'search', null);
     const [state, setState] = React.useState(initial);
     const [allBoards, setAllBoards] = React.useState(trellos.g(initial, 'allBoards', false));
     const [boards, setBoards] = React.useState(trellos.g(initial, 'boards', []));
-    const [query, setQuery] = React.useState(trellos.g(initial, 'query', ''));
+    // query инициализируется только при первом рендере
+    const [query, setQuery] = React.useState(firstTime() ? trellos.g(initial, 'query', '') : '');
     const [period, setPeriod] = React.useState({
-        since: trellos.g(initial, 'since', null),
-        before: trellos.g(initial, 'before', null)
+        // период инициализируется только при первом рендере
+        since: firstTime() ? trellos.g(initial, 'since', null) : null,
+        before: firstTime() ? trellos.g(initial, 'before', null) : null
     });
     const [flags, setFlags] = React.useState({
         allWords: trellos.g(initial, 'allWords', true),
@@ -258,11 +264,22 @@ Trellos.Search.Form = function (props) {
         setState(newState);
         let newUpState = { ...newState }
         // не сохраняем в глобальном состоянии текст запроса и период
-        delete newUpState.query;
-        delete newUpState.since;
-        delete newUpState.before;
+        delete newUpState['query'];
+        delete newUpState['since'];
+        delete newUpState['before'];
         props.onUpState('search', newUpState);
     }
+
+    React.useEffect(() => { // init effect
+        // если при первом рендере не пустой текст запроса, 
+        // значит он был получен из инициирующего состояния (из прямой ссылки)
+        // и нужно автоматически выполнить поиск
+        // срабатывает один раз, признак сохраняется в статическом флаге
+        if (query && firstTime()) {
+            onSubmit(null);
+            firstTime(false);
+        }
+    }, [])
 
     return e(BS.Form, { onSubmit: onSubmit, id: 'trellos-search-form' },
         e(BS.Form.Group, null,
@@ -384,7 +401,7 @@ Trellos.Search.Result = function (props) {
         if (pageIndex == page) return;
         setPage(pageIndex);
         document.getElementById('trellos-search-result')
-            .scrollIntoView({ block: "start", behavior: "smooth", inline: "nearest" });
+            .scrollIntoView({ block: "start", behavior: "auto", inline: "nearest" });
     }
 
     React.useEffect(() => {
@@ -399,8 +416,9 @@ Trellos.Search.Result = function (props) {
     }
 
     const pageSize = () => {
+        const maxPagesCount = 10;
         let pageCount = Math.ceil(props.data.length / Trellos.Search.config.searchPageSize);
-        if (pageCount > 8) return Math.ceil(props.data.length / 8);
+        if (pageCount > maxPagesCount) return Math.ceil(props.data.length / maxPagesCount);
         return Trellos.Search.config.searchPageSize;
     }
 
@@ -448,9 +466,22 @@ Trellos.Search.Result.Card = function (props) {
             .scrollIntoView({ block: "start", behavior: "smooth", inline: "nearest" });
     }
 
+    const onCopyUrl = (event) => {
+        trellos.blinkClass(event.target.closest('a'), '', 'text-success');
+    }
+
     const styles = {
         cardCreatedAt: {
             fontSize: '60%'
+        },
+        cardLinkInput: {
+            padding: 0,
+            width: '1px',
+            fontSize: '1px',
+            display: 'inline',
+            border: 'none',
+            color: 'transparent',
+            backgroundColor: 'transparent'
         }
     }
 
@@ -478,8 +509,16 @@ Trellos.Search.Result.Card = function (props) {
             )
         ),
         e(BS.Card.Subtitle, null,
-            e(Trellos.Search.MarkedText, { words: props.card.finded }, props.card.name),
-            e('a', { className: 'text-secondary ml-3 fab fa-trello', target: '_blank', href: props.card.shortUrl })
+            e(Trellos.Search.MarkedText, { className: 'mr-3', words: props.card.finded }, props.card.name),
+            e('a', { className: 'text-primary fab fa-trello mr-2', target: '_blank', href: props.card.shortUrl }),
+            e(Trellos.CopyToClipboard, {
+                href: props.card.shortUrl,
+                className: 'small text-secondary align-middle',
+                onClick: onCopyUrl
+            },
+                e(Trellos.FA, { var: 'link' }),
+                e(Trellos.FA, { type: 'far', var: 'copy' }),
+            )
         ),
         e(BS.Card.Text, { className: 'text-secondary mt-2', style: { fontSize: "0.8rem" } },
             e('span', { className: 'mb-1 trellos-card-desc d-block', card: props.card.id, style: { overflow: 'hidden', maxHeight: "10rem" } },
@@ -505,18 +544,22 @@ Trellos.Search.Result.Head = function (props) {
         }
     }
 
-    const onCopySearchLink = (event) => {
-        event.preventDefault();
-        const inp = document.getElementById('trellos-search-result-link');
-        inp.focus();
-        inp.select();
-        document.execCommand("copy");
-        const btn = event.target.closest('a');
-        btn.className += ' text-success';
-        inp.blur();
-        setTimeout(function () {
-            btn.className = btn.className.replace(/ text-success/, '');
-        }, 1500);
+    // const onCopySearchLink = (event) => {
+    //     event.preventDefault();
+    //     const inp = document.getElementById('trellos-search-result-link');
+    //     inp.focus();
+    //     inp.select();
+    //     document.execCommand("copy");
+    //     const btn = event.target.closest('a');
+    //     btn.className += ' text-success';
+    //     inp.blur();
+    //     setTimeout(function () {
+    //         btn.className = btn.className.replace(/ text-success/, '');
+    //     }, 1500);
+    // }
+
+    const onCopyUrl = (event) => {
+        trellos.blinkClass(event.target.closest('a'), '', 'text-success');
     }
 
     if (!props.data.length) return e(BS.Alert, { variant: 'secondary' }, 'Ничего не найдено')
@@ -526,18 +569,13 @@ Trellos.Search.Result.Head = function (props) {
             ` ${props.data.length} `,
             trellos.declOfNum(props.data.length, "карточка", "карточки", "карточек")
         ),
-        e('small', { className: 'd-inline-block' },
-            e('input', {
-                id: 'trellos-search-result-link', style: styles.searchLinkInput,
-                value: props.data.url, onChange: (event) => { event.preventDefault(); }
-            }),
-            e(Trellos.IconLink, {
-                href: props.data.url, var: 'far fa-copy',
-                onClick: onCopySearchLink
-            }, 'Копировать ссылку на этот поиск'),
-            e('a', { className: 'ml-4 fas fa-external-link-alt', href: props.data.url, target: '_blank' }),
-        ),
-
+        e(Trellos.CopyToClipboard, {
+            className: 'd-inline-block mr-5 small',
+            href: props.data.url,
+            onClick: onCopyUrl,
+            text: 'Копировать ссылку на этот поиск'
+        }),
+        e('a', { className: 'fas fa-external-link-alt small', href: props.data.url, target: '_blank' }),
     )
 }
 
@@ -550,5 +588,13 @@ Trellos.Search.MarkedText = (props) => {
     let html = props.children;
     if (props.replaceNewline) html = html.replace(/\n/gm, '<br>');
     html = html.replace(r, '<mark>$1</mark>')
-    return e('span', { dangerouslySetInnerHTML: { __html: html } });
+    let opts = {
+        ...props,
+        words: null,
+        children: null,
+        replaceNewline: null,
+        dangerouslySetInnerHTML: { __html: html }
+    }
+    delete opts.replaceNewline;
+    return e('span', opts);
 }

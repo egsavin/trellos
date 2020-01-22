@@ -50,7 +50,7 @@ trellos.plugins.add = (plugin) => {
 
 trellos.g = (props, name, def) => {
     if (props == null || props == undefined) return def;
-    if (typeof (props) != 'object') return def;
+    if (typeof (props) != 'object' && typeof (props) != 'function') return def;
     if (!props.hasOwnProperty(name)) return def;
     return props[name];
 }
@@ -58,6 +58,23 @@ trellos.g = (props, name, def) => {
 
 trellos.rndstr = () => {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+
+trellos.replaceClass = (element, prev, next = null) => {
+    if (!element) return;
+    prev = (prev || '').trim();
+    let classes = Array.from(element.classList).filter(c => c != prev);
+    if (next) classes.push(next);
+    element.className = classes.join(" ");
+}
+
+
+trellos.blinkClass = (element, prev, next, timeout = 1000) => {
+    trellos.replaceClass(element, prev, next);
+    return setTimeout(() => {
+        trellos.replaceClass(element, next, prev);
+    }, timeout);
 }
 
 
@@ -106,9 +123,9 @@ trellos.token = () => localStorage['trello_token'];
 
 
 trellos.me = async (force = false) => {
+    if (!trellos.token()) return null;
     let me = trellos.cache.getItem('me');
     if (me && !force) return me;
-    if (!trellos.token()) return null;
     try {
         me = await window.Trello.get('member/me', {
             fields: 'id,fullName,url,username,initials',
@@ -237,6 +254,7 @@ const Trellos = (props) => {
     const [hasLogout, setHasLogout] = React.useState(false);
     const [tab, setTab] = React.useState(null);
     const [state, setState] = React.useState(trellos.initialState());
+    const [first, setFirst] = React.useState(true);
 
     React.useEffect(() => {
         if (me && !trellos.checkFresh('me')) {
@@ -322,7 +340,8 @@ const Trellos = (props) => {
             e(Trellos.Body, {
                 me: me,
                 tab: tab,
-                onUpState: onUpState
+                onUpState: onUpState,
+                first: first
             }),
             e(Trellos.Footer, { me: me, onUpState: onUpState, onLogout: onLogout })
         )
@@ -332,12 +351,27 @@ const Trellos = (props) => {
 
 
 Trellos.Auth = (props) => {
+    const showAuthControls = () => {
+        const alrt = document.getElementById('trellos-auth-alert');
+        const ctrl = document.getElementById('trellos-auth-controls');
+        if (alrt) {
+            alrt.innerText = 'Требуется вход через трелло';
+            trellos.replaceClass(alrt, 'alert-info', 'alert-danger');
+        }
+        if (ctrl) trellos.replaceClass(ctrl, 'd-none', 'd-block');
+    }
+
+    React.useEffect(() => {
+        setTimeout(showAuthControls, 1000);
+    }, [])
+
     return e('div', {},
-        e(BS.Alert, { variant: 'danger' }, 'Требуется вход через Trello'),
-        e(BS.Button, { onClick: props.onAuth }, 'Войти'),
-        e('div', { className: 'mt-2' },
-            e(Trellos.Muted, null, 'Разрешите всплывающие окна на странице')
-        )
+        e(BS.Alert, { variant: 'info', id: 'trellos-auth-alert' }, 'Вход через Trello...'),
+        e('div', { id: 'trellos-auth-controls', className: 'd-none' },
+            e(BS.Button, { onClick: props.onAuth, id: 'trello-auth-button' }, 'Войти'),
+            e('div', { className: 'mt-2' },
+                e(Trellos.Muted, null, 'Разрешите всплывающие окна на странице')
+            ))
     )
 }
 
@@ -507,6 +541,56 @@ Trellos.TrelloLabel = (props) => {
         variant: null
     }
     return e('span', opts, props.children);
+}
+
+
+Trellos.CopyToClipboard = (props) => {
+    const [inputId, setInputId] = React.useState('cpytxtinp-' + (props.id || trellos.rndstr()));
+
+    const styles = {
+        input: {
+            padding: 0,
+            width: '1px',
+            fontSize: '1px',
+            display: 'inline',
+            border: 'none',
+            color: 'transparent',
+            backgroundColor: 'transparent'
+        }
+    }
+
+    const onClick = (event) => {
+        if (event) event.preventDefault();
+        const inp = document.getElementById(inputId);
+        inp.focus();
+        inp.select();
+        document.execCommand("copy");
+        inp.blur();
+        if (props.onClick) props.onClick(event, inp.value);
+    }
+
+    const aOpts = {
+        className: props.className || '',
+        id: props.id || null,
+        href: props.href || '#',
+        onClick: onClick
+    }
+
+    return e(React.Fragment, { key: props.key || props.id || props.name || trellos.rndstr },
+        e('input', {
+            id: inputId,
+            style: styles.input,
+            value: props.value || props.href,
+            onChange: (event) => { event.preventDefault(); }
+        }),
+        props.children ?
+            e('a', aOpts, props.children) :
+            e(Trellos.IconLink, {
+                ...aOpts,
+                type: props.type || 'far',
+                var: props.var || 'copy',
+            }, props.text || null),
+    )
 }
 
 
