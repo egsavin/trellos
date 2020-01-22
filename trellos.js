@@ -40,7 +40,7 @@ trellos.plugins.add = (plugin) => {
 
     const already = trellos.plugins.find(p => p.name == plugin.name);
     if (already) return false;
-    
+
     trellos.plugins.push(plugin);
     return true;
 }
@@ -420,11 +420,13 @@ Trellos.Muted = (props) => {
 
 
 Trellos.FA = (props) => {
-    let opts = Object.assign({}, props);
-    delete opts.as;
-    delete opts.children;
-    delete opts.var;
-    delete opts.type;
+    let opts = {
+        ...props,
+        as: null,
+        children: null,
+        var: null,
+        type: null
+    }
     let type = props.type || '';
     if (!type && props.var &&
         !props.var.startsWith('fas ') &&
@@ -432,10 +434,42 @@ Trellos.FA = (props) => {
         !props.var.startsWith('fab ')) type = 'fas';
     if (!type && !props.var) type = 'fas';
     opts.className = type + ' ';
-    opts.className += props.var && props.var.startsWith('fa-') ? '' : 'fa-';
-    opts.className += props.var || 'star';
+    if (props.var && props.var.startsWith('fas ') ||
+        props.var.startsWith('far ') ||
+        props.var.startsWith('fab ')) {
+        opts.className += props.var;
+    } else {
+        opts.className += props.var && props.var.startsWith('fa-') ? '' : 'fa-';
+        opts.className += props.var || 'star';
+    }
     opts.className += ' ' + (props.className || '');
     return e(props.as || 'i', opts, props.children)
+}
+
+
+Trellos.IconLink = (props) => {
+    let aopts = {
+        ...props,
+        className: 'icon-link ' + (props.className || ''),
+        var: null,
+        type: null,
+        as: null,
+        children: null
+    }
+    delete aopts.children;
+    let iopts = {
+        ...props,
+        className: 'mr-1',
+        onClick: null,
+        href: null,
+        target: null,
+        children: null
+    }
+
+    return e('a', aopts,
+        e(Trellos.FA, iopts),
+        props.children
+    )
 }
 
 
@@ -443,6 +477,36 @@ Trellos.Spinner = function (props) {
     let opts = Object.assign({}, props);
     Object.assign(opts, { variant: 'dark', size: 'sm', animation: 'border' });
     return e(BS.Spinner, opts);
+}
+
+
+Trellos.TrelloLabel = (props) => {
+    const styles = {
+        green: { backgroundColor: '#61bd4f66', color: '#666' },
+        yellow: { backgroundColor: '#f2d60066', color: '#666' },
+        orange: { backgroundColor: '#ff9f1a66', color: '#666' },
+        red: { backgroundColor: '#eb5a4666', color: '#666' },
+        purple: { backgroundColor: '#c366e066', color: '#666' },
+        blue: { backgroundColor: '#0079bf66', color: '#666' },
+        sky: { backgroundColor: '#00c2e066', color: '#666' },
+        lime: { backgroundColor: '#51e89866', color: '#666' },
+        pink: { backgroundColor: '#ff78cb66', color: '#666' },
+        black: { backgroundColor: '#35526366', color: '#666' },
+        none: { border: '1px solid #b3bec488', color: 'gray' }
+    }
+
+    let opts = {
+        ...props,
+        className: 'd-inline-block px-2 ' + (props.className || ''),
+        style: {
+            ...trellos.g(styles, props.variant, styles.none),
+            borderRadius: "10px",
+            fontSize: '0.6rem',
+        },
+        children: null,
+        variant: null
+    }
+    return e('span', opts, props.children);
 }
 
 

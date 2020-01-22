@@ -114,8 +114,6 @@ Trellos.Search.doSearch = async (me, filter) => {
         allCards.push(...boardCards);
     };
 
-    console.log('allcards', allCards.length);
-
     let searchResult = [];
     ctx.stemQuery = Porter.stemText(ctx.query, Trellos.Search.config.minWordLengthToStem);
     ctx.momentSince = ctx.since ? moment(ctx.since) : null;
@@ -396,30 +394,37 @@ Trellos.Search.Result = function (props) {
         }
     });
 
-    const dataPage = props.data.slice(page * Trellos.config.searchPageSize, (page + 1) * Trellos.config.searchPageSize)
-    let pageCount = Math.ceil(props.data.length / Trellos.config.searchPageSize);
-    let pages = [];
-    for (let i = 0; i < pageCount; i++) {
-        pages.push(e(BS.Pagination.Item, { key: i, active: i == page, onClick: () => { onChangePage(i) } }, `${i + 1}`));
-        if (i == 9) {
-            pages.push(e(BS.Pagination.Ellipsis, { key: '...' }))
-            break;
-        }
+    const pagesCount = () => {
+        return Math.ceil(props.data.length / pageSize());
     }
+
+    const pageSize = () => {
+        let pageCount = Math.ceil(props.data.length / Trellos.Search.config.searchPageSize);
+        if (pageCount > 8) return Math.ceil(props.data.length / 8);
+        return Trellos.Search.config.searchPageSize;
+    }
+
+    const pagination = () => {
+        let pages = [];
+        for (let i = 0; i < pagesCount(); i++) {
+            pages.push(e(BS.Pagination.Item, { key: i, active: i == page, onClick: () => { onChangePage(i) } }, `${i + 1}`));
+        }
+        return pages;
+    }
+
+    const dataPage = () => props.data.slice(page * pageSize(), (page + 1) * pageSize());
 
     return e('div', { className: 'mt-4', id: 'trellos-search-result' },
         e(Trellos.Search.Result.Head, { data: props.data }),
-        dataPage.map((card, i) => e(Trellos.Search.Result.Card, {
+        dataPage().map((card, i) => e(Trellos.Search.Result.Card, {
             key: card.id,
             card: card,
-            index: page * Trellos.config.searchPageSize + i
+            index: page * pageSize() + i
         })),
-        e(BS.Pagination, null,
-            pages.length > 1 ? pages : null
-        ),
-        pageCount > 10 ? e(Trellos.Muted, null, 'Показаны первые 10 страниц') : null
+        pagesCount() > 1 ? e(BS.Pagination, null, pagination()) : null
     );
 }
+
 
 Trellos.Search.Result.Card = function (props) {
     const toggleDescr = (event) => {
@@ -443,7 +448,6 @@ Trellos.Search.Result.Card = function (props) {
             .scrollIntoView({ block: "start", behavior: "smooth", inline: "nearest" });
     }
 
-
     const styles = {
         cardCreatedAt: {
             fontSize: '60%'
@@ -459,11 +463,18 @@ Trellos.Search.Result.Card = function (props) {
                     e('span', { title: 'Список' }, props.card.list.name)
                 ),
                 props.card.labels.map(label => {
-                    return e(Trellos.TrelloLabel, { key: label.id + Trellos.utils.rndstr(), variant: label.color, className: 'mr-1' }, label.name)
+                    return e(Trellos.TrelloLabel, {
+                        key: label.id + trellos.rndstr(),
+                        variant: label.color,
+                        className: 'mr-1'
+                    }, label.name)
                 })
             ),
-            e('span', { className: "text-muted", title: "Время создания", style: styles.cardCreatedAt },
-                Trellos.convertTrelloIdToTime(props.card.id).format('DD.MM.YYYY hh:mm')
+            e('span', { className: "text-muted d-inline-block", title: "Время создания/посл. активности", style: styles.cardCreatedAt },
+                e(Trellos.FA, { type: 'far', var: 'calendar-alt', className: 'mr-1' }),
+                trellos.convertTrelloIdToMoment(props.card.id).format('DD.MM.YYYY hh:mm'),
+                e(Trellos.FA, { var: 'calendar-alt', className: 'ml-2 mr-1' }),
+                moment(props.card.dateLastActivity).format('DD.MM.YYYY hh:mm')
             )
         ),
         e(BS.Card.Subtitle, null,
@@ -480,9 +491,9 @@ Trellos.Search.Result.Card = function (props) {
     ))
 }
 
+
 Trellos.Search.Result.Head = function (props) {
     const styles = {
-        searchLinkBlock: { display: 'inline-block' },
         searchLinkInput: {
             padding: 0,
             width: '1px',
@@ -511,20 +522,20 @@ Trellos.Search.Result.Head = function (props) {
     if (!props.data.length) return e(BS.Alert, { variant: 'secondary' }, 'Ничего не найдено')
     return e('div', { className: 'mb-4' },
         e(Trellos.Muted, { className: 'mr-5' },
-            Trellos.utils.declOfNum(props.data.length, ["Найдена", "Найдено", "Найдено"]),
+            trellos.declOfNum(props.data.length, "Найдена", "Найдено", "Найдено"),
             ` ${props.data.length} `,
-            Trellos.utils.declOfNum(props.data.length, ["карточка", "карточки", "карточек"])
+            trellos.declOfNum(props.data.length, "карточка", "карточки", "карточек")
         ),
-        e('small', { style: styles.searchLinkBlock },
+        e('small', { className: 'd-inline-block' },
             e('input', {
                 id: 'trellos-search-result-link', style: styles.searchLinkInput,
-                value: props.data.link, onChange: (event) => { event.preventDefault(); }
+                value: props.data.url, onChange: (event) => { event.preventDefault(); }
             }),
             e(Trellos.IconLink, {
-                href: props.data.link, variant: 'far fa-copy',
+                href: props.data.url, var: 'far fa-copy',
                 onClick: onCopySearchLink
             }, 'Копировать ссылку на этот поиск'),
-            e('a', { className: 'ml-4 fas fa-external-link-alt', href: props.data.link, target: '_blank' }),
+            e('a', { className: 'ml-4 fas fa-external-link-alt', href: props.data.url, target: '_blank' }),
         ),
 
     )
