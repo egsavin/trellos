@@ -247,6 +247,61 @@ trellos.convertTrelloIdToMoment = function (trelloId) {
 }
 
 
+trellos.sortBoardComparer = (a, b) => {
+    let sortStar = a.starred === b.starred ? 0 : (
+        a.starred && !b.starred ? -1 : 1
+    )
+    let sortAlpha = a.name == b.name ? 0 : (
+        a.name > b.name ? 1 : -1
+    )
+    let sortClosed = 0;
+    if (a.closed && !b.closed) sortClosed = 1;
+    if (b.closed && !a.closed) sortClosed = -1;
+    return sortClosed === 0 ?
+        (sortStar === 0 ? sortAlpha : sortStar)
+        : sortClosed;
+}
+
+
+trellos.sortListComparer = (a, b) => {
+    let sortClosed = 0;
+    if (a.closed && !b.closed) sortClosed = 1;
+    if (b.closed && !a.closed) sortClosed = -1;
+    let pos = a.pos - b.pos;
+    return sortClosed !== 0 ? sortClosed : pos;
+}
+
+
+
+trellos.downloadAsFile = function (filename, text) {
+    // by https://github.com/jimmywarting/StreamSaver.js
+    const blob = new Blob(Array.from(text))
+    const fileStream = streamSaver.createWriteStream(filename, {
+        size: blob.size // Makes the procentage visiable in the download
+    })
+    // One quick alternetive way if you don't want the hole blob.js thing:
+    // const readableStream = new Response(
+    //   Blob || String || ArrayBuffer || ArrayBufferView
+    // ).body
+    const readableStream = blob.stream()
+    // more optimized pipe version
+    // (Safari may have pipeTo but it's useless without the WritableStream)
+    if (window.WritableStream && readableStream.pipeTo) {
+        return readableStream.pipeTo(fileStream)
+            .then(() => { })
+    }
+    // Write (pipe) manually
+    window.writer = fileStream.getWriter()
+    const reader = readableStream.getReader()
+    const pump = () => reader.read()
+        .then(res => res.done
+            ? writer.close()
+            : writer.write(res.value).then(pump))
+
+    pump()
+}
+
+
 
 
 const Trellos = (props) => {
@@ -362,7 +417,7 @@ Trellos.Auth = (props) => {
     }
 
     React.useEffect(() => {
-        setTimeout(showAuthControls, 1000);
+        setTimeout(showAuthControls, 1500);
     }, [])
 
     return e('div', {},
@@ -446,9 +501,11 @@ Trellos.Profile = (props) => {
 
 
 Trellos.Muted = (props) => {
-    let opts = Object.assign({}, props);
-    opts.className = 'text-muted ' + props.className;
-    delete opts['as'];
+    let opts = {
+        ...props,
+        className: 'text-muted ' + props.className,
+        as: null
+    }
     return e(props.as || 'small', opts, props.children);
 }
 
@@ -508,8 +565,18 @@ Trellos.IconLink = (props) => {
 
 
 Trellos.Spinner = function (props) {
-    let opts = Object.assign({}, props);
-    Object.assign(opts, { variant: 'dark', size: 'sm', animation: 'border' });
+    let opts = {
+        ...props,
+        variant: 'dark',
+        size: 'sm',
+        animation: 'border',
+        className: (props.children ? 'mr-2 ' : '') + (props.className || '')
+    }
+    delete opts.children;
+    if (props.children) return e(React.Fragment, { key: trellos.rndstr() },
+        e(BS.Spinner, opts),
+        props.children
+    )
     return e(BS.Spinner, opts);
 }
 
@@ -592,6 +659,25 @@ Trellos.CopyToClipboard = (props) => {
             }, props.text || null),
     )
 }
+
+
+Trellos.Back = (props) => {
+    const onClick = (event) => {
+        event.preventDefault();
+        if (!props.disable) props.onClick();
+    }
+
+    return e(props.as || 'h4', { className: props.className || '' },
+        e('a', {
+            href: props.href || '#',
+            onClick: onClick,
+            style: { textDecoration: 'none' },
+            className: "mr-2" + (props.disable ? " text-muted" : '')
+        }, '←'),
+        props.children
+    );
+}
+
 
 
 

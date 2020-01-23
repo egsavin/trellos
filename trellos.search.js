@@ -332,15 +332,7 @@ Trellos.Search.Form = function (props) {
                 defaultChecked: allBoards
             }),
             allBoards ? null : props.me.boards
-                .sort((a, b) => {
-                    let sortStar = a.starred === b.starred ? 0 : (
-                        a.starred && !b.starred ? -1 : 1
-                    )
-                    let sortAlpha = a.name == b.name ? 0 : (
-                        a.name > b.name ? 1 : -1
-                    )
-                    return sortStar === 0 ? sortAlpha : sortStar;
-                })
+                .sort(trellos.boardStarredAlphaComparer)
                 .map(board => {
                     return e(BS.Form.Check, {
                         inline: true,
@@ -544,20 +536,6 @@ Trellos.Search.Result.Head = function (props) {
         }
     }
 
-    // const onCopySearchLink = (event) => {
-    //     event.preventDefault();
-    //     const inp = document.getElementById('trellos-search-result-link');
-    //     inp.focus();
-    //     inp.select();
-    //     document.execCommand("copy");
-    //     const btn = event.target.closest('a');
-    //     btn.className += ' text-success';
-    //     inp.blur();
-    //     setTimeout(function () {
-    //         btn.className = btn.className.replace(/ text-success/, '');
-    //     }, 1500);
-    // }
-
     const onCopyUrl = (event) => {
         trellos.blinkClass(event.target.closest('a'), '', 'text-success');
     }
@@ -578,6 +556,7 @@ Trellos.Search.Result.Head = function (props) {
         e('a', { className: 'fas fa-external-link-alt small', href: props.data.url, target: '_blank' }),
     )
 }
+
 
 Trellos.Search.MarkedText = (props) => {
     let words = props.words || [];
