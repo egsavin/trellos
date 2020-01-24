@@ -398,7 +398,7 @@ const Trellos = (props) => {
                 onUpState: onUpState,
                 first: first
             }),
-            e(Trellos.Footer, { me: me, onUpState: onUpState, onLogout: onLogout })
+            e(Trellos.Footer, { tab: tab, me: me, onUpState: onUpState, onLogout: onLogout })
         )
             : e(Trellos.Auth, { onAuth: onAuth }),
     )
@@ -445,7 +445,7 @@ Trellos.Nav = (props) => {
 
 
 Trellos.Body = (props) => {
-    let plugin = trellos.plugins.find(item => item.name == props.tab);
+    const plugin = trellos.plugins.find(item => item.name == props.tab);
     if (plugin == null) return e(BS.Alert, { variant: 'warning' }, 'Плагины не найдены');
     if (!trellos.checkFresh('me')) return e(Trellos.Spinner);
     return e(plugin.body, props);
@@ -466,18 +466,29 @@ Trellos.Footer = (props) => {
         }
     }
 
+    const plugin = trellos.plugins.find(item => item.name == props.tab);
+
     return e(React.Fragment, null,
         e('hr', { className: 'mt-5 mb-1' }),
-        e(Trellos.FA, {
-            as: 'a', var: 'cog', href: '#settings',
-            onClick: onToggleSettings, className: 'text-secondary'
-        }),
-        e(BS.Modal, { show: opened, onHide: onToggleSettings, animation: false },
-            e(BS.Modal.Header, { closeButton: true, style: styles.modalHeader },
-                e(Trellos.Profile, props)
-            ),
-            e(BS.Modal.Body, { className: 'p-1' },
-                // e(Trellos.Profile, props)
+        e(BS.Container, {},
+            e(BS.Row, {},
+                e(BS.Col, { className: 'pl-0' },
+                    plugin && plugin.footer ? e(plugin.footer, props) : null
+                ),
+                e(BS.Col, { xs: 1, className: 'text-right pr-0' },
+                    e(Trellos.FA, {
+                        as: 'a', var: 'cog', href: '#settings',
+                        onClick: onToggleSettings, className: 'text-secondary'
+                    }),
+                    e(BS.Modal, { show: opened, onHide: onToggleSettings, animation: false },
+                        e(BS.Modal.Header, { closeButton: true, style: styles.modalHeader },
+                            e(Trellos.Profile, props)
+                        ),
+                        e(BS.Modal.Body, { className: 'p-1' },
+                            // e(Trellos.Profile, props)
+                        )
+                    )
+                )
             )
         )
     )
@@ -742,5 +753,37 @@ Trellos.Form.DateControl = (props) => {
     return e(React.Fragment, { key: `input-${props.name || defaultName}` },
         e(BS.Form.Control, opts),
         trellos.g(props, 'showParsed', true) ? e(Trellos.Muted, {}, parsedValue()) : null
+    )
+}
+
+
+
+Trellos.ModalForm = (props) => {
+    const mopts = {
+        ...props,
+        title: null,
+        children: null,
+        cancelText: null,
+        okText: null
+    }
+
+    const onSubmit = (event) => {
+        event.preventDefault();
+        props.onSave();
+    }
+
+    return e(BS.Modal, { show: true, onHide: props.onCancel, animation: false },
+        e(BS.Modal.Header, { closeButton: true },
+            e(BS.Modal.Title, { as: 'strong' }, props.title || 'Настройка')
+        ),
+        e(BS.Modal.Body, {},
+            e(BS.Form, { onSubmit: onSubmit },
+                props.children
+            )
+        ),
+        e(BS.Modal.Footer, {},
+            e(BS.Button, { variant: 'secondary', onClick: props.onCancel }, props.cancelText || 'Отмена'),
+            e(BS.Button, { variant: 'primary', onClick: props.onSave }, props.okText || 'Сохранить')
+        )
     )
 }
