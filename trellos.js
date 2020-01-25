@@ -131,7 +131,7 @@ trellos.me = async (force = false) => {
             fields: 'id,fullName,url,username,initials',
             boards: 'all',
             board_fields: 'id,name,closed,starred,shortUrl',
-            board_lists: 'all'
+            board_lists: 'all',
         });
     } catch {
         delete localStorage['trello_token'];
@@ -468,27 +468,19 @@ Trellos.Footer = (props) => {
 
     const plugin = trellos.plugins.find(item => item.name == props.tab);
 
-    return e(React.Fragment, null,
-        e('hr', { className: 'mt-5 mb-1' }),
-        e(BS.Container, {},
-            e(BS.Row, {},
-                e(BS.Col, { className: 'pl-0' },
-                    plugin && plugin.footer ? e(plugin.footer, props) : null
-                ),
-                e(BS.Col, { xs: 1, className: 'text-right pr-0' },
-                    e(Trellos.FA, {
-                        as: 'a', var: 'cog', href: '#settings',
-                        onClick: onToggleSettings, className: 'text-secondary'
-                    }),
-                    e(BS.Modal, { show: opened, onHide: onToggleSettings, animation: false },
-                        e(BS.Modal.Header, { closeButton: true, style: styles.modalHeader },
-                            e(Trellos.Profile, props)
-                        ),
-                        e(BS.Modal.Body, { className: 'p-1' },
-                            // e(Trellos.Profile, props)
-                        )
-                    )
-                )
+    return e(BS.Container, { className: 'pl-0 mt-5' },
+        e(Trellos.FA, {
+            className: 'text-muted',
+            var: 'cog',
+            onClick: onToggleSettings,
+            style: { opacity: 0.4, cursor: 'pointer' }
+        }),
+        e(BS.Modal, { show: opened, onHide: onToggleSettings, animation: false },
+            e(BS.Modal.Header, { closeButton: true, style: styles.modalHeader },
+                e(Trellos.Profile, props)
+            ),
+            e(BS.Modal.Body, { className: 'p-1' },
+                // e(Trellos.Profile, props)
             )
         )
     )
@@ -654,7 +646,7 @@ Trellos.CopyToClipboard = (props) => {
         onClick: onClick
     }
 
-    return e(React.Fragment, { key: props.key || props.id || props.name || trellos.rndstr },
+    return e(React.Fragment, { key: props.key || props.id || props.name || trellos.rndstr() },
         e('input', {
             id: inputId,
             style: styles.input,
@@ -757,22 +749,18 @@ Trellos.Form.DateControl = (props) => {
 }
 
 
-
 Trellos.ModalForm = (props) => {
-    const mopts = {
-        ...props,
-        title: null,
-        children: null,
-        cancelText: null,
-        okText: null
-    }
-
     const onSubmit = (event) => {
         event.preventDefault();
         props.onSave();
     }
 
-    return e(BS.Modal, { show: true, onHide: props.onCancel, animation: false },
+    return e(BS.Modal, {
+        show: props.hasOwnProperty('show') ? props.show : true,
+        onHide: props.onCancel,
+        animation: false,
+        size: props.size || null
+    },
         e(BS.Modal.Header, { closeButton: true },
             e(BS.Modal.Title, { as: 'strong' }, props.title || 'Настройка')
         ),
@@ -782,8 +770,59 @@ Trellos.ModalForm = (props) => {
             )
         ),
         e(BS.Modal.Footer, {},
-            e(BS.Button, { variant: 'secondary', onClick: props.onCancel }, props.cancelText || 'Отмена'),
-            e(BS.Button, { variant: 'primary', onClick: props.onSave }, props.okText || 'Сохранить')
+            props.noCancel ? null : e(BS.Button, { variant: 'secondary', onClick: props.onCancel }, props.cancelText || 'Отмена'),
+            props.noSave ? null : e(BS.Button, { variant: 'primary', onClick: props.onSave }, props.okText || 'Сохранить')
         )
     )
 }
+
+
+Trellos.Modal = (props) => {
+    return e(BS.Modal, {
+        show: props.hasOwnProperty('show') ? props.show : true,
+        onHide: props.onHide,
+        animation: false,
+        size: props.size || null
+    },
+        e(BS.Modal.Header, { closeButton: true },
+            e(BS.Modal.Title, { as: 'strong' }, props.title || null)
+        ),
+        e(BS.Modal.Body, {},
+            props.children
+        ),
+        e(BS.Modal.Footer, { className: 'p-0' })
+    )
+}
+
+
+Trellos.Form.Checks = (props) => {
+    const rnd = trellos.rndstr();
+    const [checked, setChecked] = React.useState(props.checked ? [...props.checked] : []);
+
+    const onChange = (event) => {
+        const check = event.target.closest('input');
+        if (!check) return;
+        let newChecked = [];
+        if (props.type == 'checkbox') newChecked = checked.filter(i => i !== check.value);
+        if (check.checked) newChecked.push(check.value);
+        setChecked(checked);
+        props.onChange(newChecked);
+    }
+
+    if (!props.data || !props.data.length) return null;
+    return props.data.map(item => {
+        const itemRnd = trellos.rndstr();
+        return e(BS.Form.Check, {
+            key: itemRnd,
+            type: props.type == 'radio' ? 'radio' : 'checkbox',
+            name: item.name || `checks-${rnd}`,
+            value: item.value || item.id,
+            id: item.id || `checks-item-${itemRnd}`,
+            label: item.label || null,
+            onChange: onChange,
+            defaultChecked: Boolean(item.checked)
+        })
+    })
+}
+
+
