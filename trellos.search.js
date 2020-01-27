@@ -178,7 +178,12 @@ Trellos.Search.Form = function (props) {
 
     const onSubmit = (event) => {
         if (event) event.preventDefault();
-        props.onSubmit({ ...state });
+        props.onSubmit({
+            ...state,
+            allWords: flags.allWords,
+            allowArchive: flags.allowArchive,
+            sortMode: flags.sortMode
+        });
     }
 
     const onChangeQuery = (event) => {
@@ -492,15 +497,12 @@ Trellos.Search.Result.Card = function (props) {
         ),
         e(BS.Card.Subtitle, null,
             e(Trellos.Search.MarkedText, { className: 'mr-3', words: props.card.finded }, props.card.name),
-            e('a', { className: 'text-primary fab fa-trello mr-2', target: '_blank', href: props.card.shortUrl }),
+            e('a', { className: 'text-primary fab fa-trello mr-2', target: '_blank', href: props.card.shortUrl, style: { opacity: 0.6 } }),
             e(Trellos.CopyToClipboard, {
                 href: props.card.shortUrl,
                 className: 'small text-secondary align-middle',
                 onClick: onCopyUrl
-            },
-                e(Trellos.FA, { var: 'link' }),
-                e(Trellos.FA, { type: 'far', var: 'copy' }),
-            )
+            }, e(Trellos.FA, { var: 'link', style: { opacity: 0.7 } }))
         ),
         e(BS.Card.Text, { className: 'text-secondary mt-2', style: { fontSize: "0.8rem" } },
             e('span', { className: 'mb-1 trellos-card-desc d-block', card: props.card.id, style: { overflow: 'hidden', maxHeight: "10rem" } },
