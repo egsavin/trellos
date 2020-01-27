@@ -4,13 +4,6 @@
 window['e'] = React.createElement;
 window['BS'] = ReactBootstrap;
 
-// 572b01c243d0fe5584854b37
-// 5b9627c70be47e5fac74bdde,573415388737a62d5689534c,5cadc11977e0103aad553d75,5860043ef044bae11fed73e9
-// 572b01ce2c4e62bca8cc7d5f,5a2572b868dd56b82f309e65
-// 572b01d0ffe9abe7e0c08acd
-// 5b0ffbcc738bd83d75de2b12,572b01d7fff66e209bffd3bb
-
-// 58134fba843845c32ee4aa67 al
 
 Trellos.Dash = (props) => {
     const [settings, setSettings] = React.useState(Trellos.Dash.initialSettings())

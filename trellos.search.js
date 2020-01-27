@@ -100,7 +100,7 @@ Trellos.Search.doSearch = async (me, filter) => {
         const cacheKey = `search-${idBoard}`;
         // загружаю все карточки из доски и кеширую. фильтрация по условиям — потом
         let boardCards = await trellos.boardCards(idBoard);
-        allCards.push(...boardCards);
+        if (boardCards && boardCards.length) allCards.push(...boardCards);
     };
 
     let searchResult = [];
