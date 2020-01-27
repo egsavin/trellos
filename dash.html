@@ -16,10 +16,10 @@
     </div>
     <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
     <script>$.noConflict();</script>
-    <script src="https://unpkg.com/react@16/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js"></script>
-    <!-- <script src="https://unpkg.com/react@16/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"></script> -->
+    <!-- <script src="https://unpkg.com/react@16/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js"></script> -->
+    <script src="https://unpkg.com/react@16/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/react-bootstrap@next/dist/react-bootstrap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.3/StreamSaver.min.js"></script>
     <script src="https://trello.com/1/client.js?key=0a1cd503cc143ebd0e3d72029e5ef676"></script>
@@ -28,10 +28,14 @@
     <script src="cache.js"></script>
     <script src="trellos.js?rand=A3D5FDDA-48D2-4AC2-8149-7198C2476EEA"></script>
     <script src="trellos.search.js?rand=A3D5FDDA-48D2-4AC2-8149-7198C2476EEA"></script>
+    <script src="trellos.browser.js?rand=A3D5FDDA-48D2-4AC2-8149-7198C2476EEA"></script>
     <script src="trellos.export.js?rand=A3D5FDDA-48D2-4AC2-8149-7198C2476EEA"></script>
+    <script src="trellos.dash.js?rand=A3D5FDDA-48D2-4AC2-8149-7198C2476EEA"></script>
     <script>
+        trellos.plugins.add(Trellos.Dash);
         trellos.plugins.add(Trellos.Search);
         trellos.plugins.add(Trellos.Export);
+        trellos.plugins.add(Trellos.Browser);
         trellos(document.getElementById('trellos'));
     </script>
 </body>

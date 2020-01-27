@@ -50,7 +50,6 @@ Trellos.Search.plugin = {
 Trellos.Search.config = {
     minWordLengthToStem: 4,
     minQueryLength: 2,
-    searchCacheTtl: 1000 * 60 * 5,
     searchPageSize: 30,
 }
 
@@ -99,17 +98,8 @@ Trellos.Search.doSearch = async (me, filter) => {
     for (let i = 0; i < ctx.boards.length; i++) {
         const idBoard = ctx.boards[i];
         const cacheKey = `search-${idBoard}`;
-        let boardCards = trellos.cache.getItem(cacheKey);
-        if (boardCards == null) {
-            boardCards = await trellos.getRecursive(`boards/${idBoard}/cards`, {
-                // загружаю все карточки из доски и кеширую. фильтрация по условиям — потом
-                filter: "all",
-                fields: "id,name,desc,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity",
-                members: "true",
-                members_fields: "id,fullName,username,initials"
-            })
-            trellos.cache.setItem(cacheKey, boardCards, Trellos.Search.config.searchCacheTtl)
-        }
+        // загружаю все карточки из доски и кеширую. фильтрация по условиям — потом
+        let boardCards = await trellos.boardCards(idBoard);
         allCards.push(...boardCards);
     };
 

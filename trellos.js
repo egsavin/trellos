@@ -15,7 +15,8 @@ trellos.nbsp = '\u00A0';
 trellos.config = {
     meCacheTtl: 1000 * 60 * 5,
     cookieName: 'trellosjs2',
-    cookieTtl: 60 * 60 * 24 * 365
+    cookieTtl: 60 * 60 * 24 * 365,
+    cardsCacheTtl: 1000 * 60 * 5
 }
 
 
@@ -26,10 +27,12 @@ trellos.plugins = [];
     name: string
     tab: name of React.Component
     body: name of React.Component
+    footer: name of React.Component (if called from footer)
 } */
 
 trellos.plugins.add = (plugin) => {
-    const isPlugin = (p) => plugin && plugin.name && plugin.body && plugin.hasOwnProperty('tab');
+    const isPlugin = (p) => plugin && plugin.name && plugin.body &&
+        (plugin.tab || plugin.footer);
 
     let ok = isPlugin(plugin);
     if (!ok && plugin && plugin.plugin) {
@@ -139,6 +142,21 @@ trellos.me = async (force = false) => {
     }
     trellos.cache.setItem('me', me, trellos.config.meCacheTtl);
     return me;
+}
+
+
+trellos.boardCards = async (idBoard, force = false) => {
+    let cards = trellos.cache.getItem(`board-cards-${idBoard}`);
+    if (cards == null || force) {
+        cards = await trellos.getRecursive(`boards/${idBoard}/cards`, {
+            filter: "all",
+            fields: "id,name,desc,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity",
+            members: "true",
+            members_fields: "id,fullName,username,initials",
+        })
+        trellos.cache.setItem(`board-cards-${idBoard}`, cards, trellos.config.cardsCacheTtl)
+    }
+    return cards;
 }
 
 
@@ -272,7 +290,6 @@ trellos.sortListComparer = (a, b) => {
 }
 
 
-
 trellos.downloadAsFile = function (filename, text) {
     // by https://github.com/jimmywarting/StreamSaver.js
     const blob = new Blob(Array.from(text))
@@ -300,6 +317,7 @@ trellos.downloadAsFile = function (filename, text) {
 
     pump()
 }
+
 
 
 
@@ -398,7 +416,13 @@ const Trellos = (props) => {
                 onUpState: onUpState,
                 first: first
             }),
-            e(Trellos.Footer, { tab: tab, me: me, onUpState: onUpState, onLogout: onLogout })
+            e(Trellos.Footer, {
+                tab: tab,
+                me: me,
+                onUpState: onUpState,
+                onLogout: onLogout,
+                onChangeTab: onChangeTab
+            })
         )
             : e(Trellos.Auth, { onAuth: onAuth }),
     )
@@ -437,9 +461,11 @@ Trellos.Nav = (props) => {
     }
 
     return e(BS.Nav, { onSelect: onSelect, activeKey: props.tab, className: 'mb-4', variant: 'tabs' },
-        trellos.plugins.map((plugin, index) =>
-            e(React.Fragment, { key: `${plugin.name}-${index}` }, e(plugin.tab, props))
-        )
+        trellos.plugins
+            .filter(p => p.tab)
+            .map((plugin, index) =>
+                e(React.Fragment, { key: `${plugin.name}-${index}` }, e(plugin.tab, props))
+            )
     )
 }
 
@@ -453,38 +479,39 @@ Trellos.Body = (props) => {
 
 
 Trellos.Footer = (props) => {
-    const [opened, setOpened] = React.useState(false);
+    const [modal, setModal] = React.useState(null);
 
-    const onToggleSettings = (event) => {
-        if (event) event.preventDefault();
-        setOpened(!opened);
-    }
+    const modalPlugin = () => trellos.plugins.find(p => p.name == modal) || null;
 
-    const styles = {
-        modalHeader: {
-            borderBottom: 0
-        }
-    }
-
-    const plugin = trellos.plugins.find(item => item.name == props.tab);
-
-    return e(BS.Container, { className: 'pl-0 mt-5' },
+    return e(BS.Container, { className: 'px-0 mt-5' },
+        e('hr', { style: { opacity: 0.5 }, className: 'm-0 mb-1' }),
         e(Trellos.FA, {
-            className: 'text-muted',
+            className: 'text-muted mr-3',
             var: 'cog',
-            onClick: onToggleSettings,
+            onClick: () => setModal('settings'),
             style: { opacity: 0.4, cursor: 'pointer' }
         }),
-        e(BS.Modal, { show: opened, onHide: onToggleSettings, animation: false },
-            e(BS.Modal.Header, { closeButton: true, style: styles.modalHeader },
-                e(Trellos.Profile, props)
-            ),
-            e(BS.Modal.Body, { className: 'p-1' },
-                // e(Trellos.Profile, props)
-            )
-        )
+
+        trellos.plugins
+            .filter(p => p.footer)
+            .map(plugin => e('span', {
+                key: plugin.name,
+                className: 'mr-3',
+                style: { cursor: 'pointer' },
+                onClick: () => plugin.modal ? setModal(plugin.name) : props.onChangeTab(plugin.name)
+            },
+                e(plugin.footer, props)
+            )),
+
+        modal && modal.length ? e(Trellos.Modal, {
+            title: modal == 'settings' ? 'Параметры' : modalPlugin().modal,
+            onHide: () => setModal(null),
+        },
+            modal == 'settings' ? e(Trellos.Profile, props) : e(modalPlugin().body, props)
+        ) : null
     )
 }
+
 
 
 Trellos.Profile = (props) => {
@@ -643,7 +670,8 @@ Trellos.CopyToClipboard = (props) => {
         className: props.className || '',
         id: props.id || null,
         href: props.href || '#',
-        onClick: onClick
+        onClick: onClick,
+        style: props.style || null
     }
 
     return e(React.Fragment, { key: props.key || props.id || props.name || trellos.rndstr() },
@@ -790,7 +818,7 @@ Trellos.Modal = (props) => {
         e(BS.Modal.Body, {},
             props.children
         ),
-        e(BS.Modal.Footer, { className: 'p-0' })
+        e(BS.Modal.Footer, { className: 'p-0', style: { border: 'none' } })
     )
 }
 
