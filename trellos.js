@@ -13,7 +13,7 @@ trellos.nbsp = '\u00A0';
 
 
 trellos.config = {
-    meCacheTtl: 1000 * 60 * 5,
+    meCacheTtl: 1000 * 60 * 10,
     cookieName: 'trellosjs2',
     cookieTtl: 60 * 60 * 24 * 365,
     cardsCacheTtl: 1000 * 60 * 5

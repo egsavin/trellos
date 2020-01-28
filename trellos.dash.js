@@ -22,6 +22,7 @@ Trellos.Dash = (props) => {
     }
 
     const dashLink = () => e('a', {
+        className: 'mr-5',
         style: { opacity: 0.6 },
         target: "_blank",
         href: `${document.location.origin + document.location.pathname}?tab=dash&dash=` + btoa(encodeURIComponent(JSON.stringify(settings)))
@@ -40,7 +41,7 @@ Trellos.Dash = (props) => {
                 href: '#',
                 onClick: (event) => { event.preventDefault(); setOnSettings(true) },
             }, 'Настройка панели'),
-            view() == 'badSettings' ? null : dashLink()
+            view() == 'badSettings' ? null : dashLink(),
         ),
         view() == "settings" ? e(Trellos.Dash.Settings, {
             ...props,
@@ -53,7 +54,8 @@ Trellos.Dash = (props) => {
 
 
 Trellos.Dash.config = {
-    dataCacheTtl: 1000 * 60 * 1
+    dataCacheTtl: 1000 * 60 * 5,
+    autoUpdateTime: 1000 * 60 * 5
 }
 
 
@@ -174,13 +176,30 @@ Trellos.Dash.Settings = (props) => {
 
 Trellos.Dash.Dash = (props) => {
     const [data, setData] = React.useState(null);
+    const [loading, setLoading] = React.useState(false);
+    const [autoUpdateTimer, setAutoUpdateTimer] = React.useState(null);
+
+    const refreshData = (force = false) => {
+        setLoading(true);
+        Trellos.Dash.data(props.settings, force).then((newData) => {
+            setData(newData);
+            setLoading(false);
+        })
+    }
+
+    React.useEffect(() => {
+        if (!Trellos.Dash.config.autoUpdateTime || autoUpdateTimer) return;
+        setAutoUpdateTimer(setInterval(() => {
+            refreshData(true);
+        },
+            Trellos.Dash.config.autoUpdateTime
+        ));
+        return () => { if (autoUpdateTimer) clearInterval(autoUpdateTimer); }
+    }, [])
 
     React.useEffect(() => {
         if (trellos.checkFresh('dashboard') && data) return;
-        setData(null);
-        Trellos.Dash.data(props.settings).then((newData) => {
-            setData(newData);
-        })
+        refreshData();
     })
 
     const link = (href, text) => e(BS.Card.Title, null,
@@ -226,12 +245,28 @@ Trellos.Dash.Dash = (props) => {
                     }, card.name),
                     e(Trellos.CopyToClipboard, {
                         className: 'mr-2 text-primary', type: 'fas', var: 'link',
-                        value: card.shortUrl, style: { opacity: 0.6 }
+                        value: card.shortUrl, style: { opacity: 0.6 },
+                        onClick: (event) => trellos.blinkClass(event.target, '', 'text-success')
                     }),
-                    e(Trellos.CopyToClipboard, { value: card.name, className: 'text-muted', style: { opacity: 0.8 } }),
+                    e(Trellos.CopyToClipboard, {
+                        value: card.name, className: 'text-muted',
+                        style: { opacity: 0.8 },
+                        onClick: (event) => trellos.blinkClass(event.target, '', 'text-success')
+                    }),
                 ))
             ))
     }
+
+    const reloadButton = () => {
+        if (loading) return e(Trellos.Spinner, { className: 'float-right mt-2 small', style: { opacity: 0.3 } });
+        return e(Trellos.FA, {
+            className: 'float-right small mt-2',
+            type: 'fas', var: 'sync',
+            style: { cursor: 'pointer', opacity: 0.4 },
+            onClick: () => refreshData(true)
+        })
+    }
+
 
     return !data ? e(Trellos.Spinner) :
         e(BS.CardDeck, null,
@@ -245,7 +280,9 @@ Trellos.Dash.Dash = (props) => {
                 },
                     e(BS.Card.Body, { className: 'px-0 pt-3 pb-2' },
                         e('div', { className: 'px-2' },
-                            link(`${data.board.shortUrl}?filter=member:${member.username}`, member.fullName)
+                            reloadButton(),
+                            link(`${data.board.shortUrl}?filter=member:${member.username}`, member.fullName),
+
                         ),
                         e(BS.Card.Text, { as: 'div' },
                             stage(member, 'idListsTodo', 'в очереди', 'text-info'),
@@ -261,18 +298,19 @@ Trellos.Dash.Dash = (props) => {
 
 Trellos.Dash.data = async (settings, force = false) => {
     let data = trellos.cache.getItem('dashboard');
-    if (data && !force) return data;
+    let boardMembers = trellos.cache.getItem(`dashboard-members-${settings.idBoard}`);
+    if (data && boardMembers && !force) return data;
     data = {}
     const me = await trellos.me();
     data.board = me.boards.find(board => board.id == settings.idBoard);
-    data.members = trellos.cache.getItem(`dashboard-members-${settings.idBoard}`);
-    if (!data.members || force) {
+    if (!boardMembers || force) {
         const members = await window.Trello.get(`/boards/${settings.idBoard}/members`, {
             fields: 'id,username,fullName'
         });
-        data.members = members.filter(m => settings.idMembers.find(idm => idm == m.id));
+        boardMembers = members.filter(m => settings.idMembers.find(idm => idm == m.id));
         trellos.cache.setItem(`dashboard-members-${settings.idBoard}`, data.members, Trellos.Dash.config.dataCacheTtl);
     }
+    data.members = boardMembers;
     data.lists = data.board.lists
         .filter(list => {
             return settings.idListsTodo.find(idl => idl == list.id)
@@ -281,11 +319,16 @@ Trellos.Dash.data = async (settings, force = false) => {
         });
     const cards = await trellos.boardCards(settings.idBoard, force);
     data.cards = cards.filter(card => {
-        return !card.closed &&
-            card.members.find(crdMbr => settings.idMembers.find(idm => idm == crdMbr.id)) &&
-            (settings.idListsTodo.find(idl => idl == card.idList)
-                || settings.idListsWork.find(idl => idl == card.idList)
-                || settings.idListsDone.find(idl => idl == card.idList))
+        try {
+            return !card.closed &&
+                card.members &&
+                card.members.find(crdMbr => settings.idMembers.find(idm => idm == crdMbr.id)) &&
+                (settings.idListsTodo.find(idl => idl == card.idList)
+                    || settings.idListsWork.find(idl => idl == card.idList)
+                    || settings.idListsDone.find(idl => idl == card.idList)
+                )
+        } catch (e) {
+        }
     });
     trellos.cache.setItem('dashboard', data, Trellos.Dash.config.dataCacheTtl);
     return data;
