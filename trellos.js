@@ -128,7 +128,7 @@ trellos.token = () => localStorage['trello_token'];
 trellos.me = async (force = false) => {
     if (!trellos.token()) return null;
     let me = trellos.cache.getItem('me');
-    if (me && !force) return me;
+    if (me && me.boards && !force) return me;
     try {
         me = await window.Trello.get('member/me', {
             fields: 'id,fullName,url,username,initials',

@@ -302,6 +302,7 @@ Trellos.Dash.data = async (settings, force = false) => {
     if (data && boardMembers && !force) return data;
     data = {}
     const me = await trellos.me();
+    console.log('ddata', me);
     data.board = me.boards.find(board => board.id == settings.idBoard);
     if (!boardMembers || force) {
         const members = await window.Trello.get(`/boards/${settings.idBoard}/members`, {
