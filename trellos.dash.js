@@ -8,6 +8,11 @@ window['BS'] = ReactBootstrap;
 Trellos.Dash = (props) => {
     const [settings, setSettings] = React.useState(Trellos.Dash.initialSettings())
     const [onSettings, setOnSettings] = React.useState(false)
+    const [updatedAt, setUpdatedAt] = React.useState(null)
+
+    const onUpdated = (mdate) => {
+        setUpdatedAt(mdate);
+    }
 
     const view = () => {
         if (onSettings) return "settings";
@@ -32,8 +37,10 @@ Trellos.Dash = (props) => {
         if (settings.idBoard) Trellos.Dash.data(settings, true);
     }, [settings.idBoard])
 
+    const updatedInfo = () => e(Trellos.Muted, { style: { opacity: 0.8 }, className: 'd-inline-block mr-5' }, updatedAt.format('DD MMM HH:mm:ss'))
+
     return e(React.Fragment, { key: 'trellos-dash' },
-        view() == 'dash' ? e(Trellos.Dash.Dash, { ...props, settings }) : null,
+        view() == 'dash' ? e(Trellos.Dash.Dash, { ...props, settings, onUpdated }) : null,
         e('div', { className: 'small mt-5' },
             view() == 'badSettings' ? e('span', { className: 'align-middle text-danger mr-2' }, 'Панель не настроена!') : null,
             e('a', {
@@ -42,6 +49,7 @@ Trellos.Dash = (props) => {
                 onClick: (event) => { event.preventDefault(); setOnSettings(true) },
             }, 'Настройка панели'),
             view() == 'badSettings' ? null : dashLink(),
+            view() == 'badSettings' || !updatedAt ? null : updatedInfo(),
         ),
         view() == "settings" ? e(Trellos.Dash.Settings, {
             ...props,
@@ -184,6 +192,7 @@ Trellos.Dash.Dash = (props) => {
         Trellos.Dash.data(props.settings, force).then((newData) => {
             setData(newData);
             setLoading(false);
+            props.onUpdated(moment());
         })
     }
 
