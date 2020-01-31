@@ -235,7 +235,7 @@ Trellos.Dash.Dash = (props) => {
             if (!colors.includes(label.color)) colors.push(label.color);
         });
         if (!colors.length) return null;
-        return e('span', { style: {fontSize: '50%'}, className: 'mr-3' }, colors.map(color => e(Trellos.FA, {
+        return e('span', { style: { fontSize: '50%' }, className: 'mr-3 align-middle' }, colors.map(color => e(Trellos.FA, {
             var: 'circle',
             style: {
                 marginRight: '1px',
