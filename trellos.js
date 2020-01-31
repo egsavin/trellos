@@ -612,32 +612,43 @@ Trellos.Spinner = function (props) {
 
 
 Trellos.TrelloLabel = (props) => {
-    const styles = {
-        green: { backgroundColor: '#61bd4f66', color: '#666' },
-        yellow: { backgroundColor: '#f2d60066', color: '#666' },
-        orange: { backgroundColor: '#ff9f1a66', color: '#666' },
-        red: { backgroundColor: '#eb5a4666', color: '#666' },
-        purple: { backgroundColor: '#c366e066', color: '#666' },
-        blue: { backgroundColor: '#0079bf66', color: '#666' },
-        sky: { backgroundColor: '#00c2e066', color: '#666' },
-        lime: { backgroundColor: '#51e89866', color: '#666' },
-        pink: { backgroundColor: '#ff78cb66', color: '#666' },
-        black: { backgroundColor: '#35526366', color: '#666' },
-        none: { border: '1px solid #b3bec488', color: 'gray' }
-    }
-
+    const color = Trellos.TrelloLabel.color(props.variant);
     let opts = {
         ...props,
         className: 'd-inline-block px-2 ' + (props.className || ''),
-        style: {
-            ...trellos.g(styles, props.variant, styles.none),
+        style: color ? {
+            backgroundColor: color + '66',
+            color: 'gray',
             borderRadius: "10px",
             fontSize: '0.6rem',
-        },
+        } : {
+                border: '1px solid #b3bec488',
+                color: 'gray',
+                borderRadius: "10px",
+                fontSize: '0.6rem',
+            },
         children: null,
         variant: null
     }
     return e('span', opts, props.children);
+}
+
+
+Trellos.TrelloLabel.color = (name) => {
+    if (!name) return null;
+    const colors = {
+        green: '#61bd4f',
+        yellow: '#f2d600',
+        orange: '#ff9f1a',
+        red: '#eb5a46',
+        purple: '#c366e0',
+        blue: '#0079bf',
+        sky: '#00c2e0',
+        lime: '#51e898',
+        pink: '#ff78cb',
+        black: '#355263',
+    }
+    return colors.hasOwnProperty(name) ? colors[name] : null;
 }
 
 

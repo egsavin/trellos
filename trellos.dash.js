@@ -229,6 +229,22 @@ Trellos.Dash.Dash = (props) => {
 
     const cardUrl = (card, member) => card.shortUrl + "?filter=member:" + member.username;
 
+    const cardLabels = (card) => {
+        const colors = [];
+        card.labels.forEach(label => {
+            if (!colors.includes(label.color)) colors.push(label.color);
+        });
+        if (!colors.length) return null;
+        return e('small', { className: 'mr-3' }, colors.map(color => e(Trellos.FA, {
+            var: 'circle',
+            style: {
+                color: (Trellos.TrelloLabel.color(color) || '#bbbbbb') + 'bb',
+            },
+            title: card.labels.filter(l => l.color == color).map(l => l.name).join(", ")
+        })
+        ))
+    }
+
     const stage = (member, listField, name, color, hideZero = false) => {
         let lists = [];
         for (let l = 0; l < props.settings[listField].length; l++) {
@@ -260,6 +276,7 @@ Trellos.Dash.Dash = (props) => {
                         href: cardUrl(card, member),
                         title: `${data.board.name} / ` + lists.find(l => l.id == card.idList).name
                     }, card.name),
+                    cardLabels(card),
                     e(Trellos.CopyToClipboard, {
                         className: 'mr-2 text-primary', type: 'fas', var: 'link',
                         value: card.shortUrl, style: { opacity: 0.6 },
