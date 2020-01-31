@@ -235,9 +235,10 @@ Trellos.Dash.Dash = (props) => {
             if (!colors.includes(label.color)) colors.push(label.color);
         });
         if (!colors.length) return null;
-        return e('small', { className: 'mr-3' }, colors.map(color => e(Trellos.FA, {
+        return e('span', { style: {fontSize: '50%'}, className: 'mr-3' }, colors.map(color => e(Trellos.FA, {
             var: 'circle',
             style: {
+                marginRight: '1px',
                 color: (Trellos.TrelloLabel.color(color) || '#bbbbbb') + 'bb',
             },
             title: card.labels.filter(l => l.color == color).map(l => l.name).join(", ")
