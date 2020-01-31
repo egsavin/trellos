@@ -150,7 +150,7 @@ trellos.boardCards = async (idBoard, force = false) => {
     if (cards == null || force) {
         cards = await trellos.getRecursive(`boards/${idBoard}/cards`, {
             filter: "all",
-            fields: "id,name,desc,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity",
+            fields: "id,name,desc,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity,pos",
             members: "true",
             members_fields: "id,fullName,username,initials",
         })

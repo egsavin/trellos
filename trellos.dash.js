@@ -230,11 +230,19 @@ Trellos.Dash.Dash = (props) => {
     const cardUrl = (card, member) => card.shortUrl + "?filter=member:" + member.username;
 
     const stage = (member, listField, name, color, hideZero = false) => {
-        const lists = data.lists.filter(list => props.settings[listField].find(idl => idl == list.id));
-        const cards = data.cards.filter(card =>
-            card.members.find(mbr => mbr.id == member.id) &&
-            props.settings[listField].find(idl => idl == card.idList)
-        );
+        let lists = [];
+        for (let l = 0; l < props.settings[listField].length; l++) {
+            // не использую .filter, чтобы сохранить порядок, заданный в настройках
+            lists.push(data.lists.find(list => list.id == props.settings[listField][l]))
+        }
+        let cards = [];
+        for (let l = 0; l < props.settings[listField].length; l++) {
+            // простой цикл по спискам, чтобы сохранить порядок
+            cards.push(...data.cards.filter(card =>
+                card.members.find(mbr => mbr.id == member.id) &&
+                card.idList == props.settings[listField][l]
+            ))
+        }
         if (hideZero && !cards.length) return null;
         return e(React.Fragment, { key: trellos.rndstr() },
             cardsCount(cards.length, name, color),
