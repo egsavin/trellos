@@ -51,6 +51,7 @@ Trellos.Search.config = {
     minWordLengthToStem: 4,
     minQueryLength: 2,
     searchPageSize: 30,
+    cardsCacheTtl: 1000 * 60 * 5,
 }
 
 
@@ -97,9 +98,14 @@ Trellos.Search.doSearch = async (me, filter) => {
     let allCards = [];
     for (let i = 0; i < ctx.boards.length; i++) {
         const idBoard = ctx.boards[i];
+        const cardsCacheKey = () => `trellos-search-board-cards-${idBoard}`;
         const cacheKey = `search-${idBoard}`;
         // загружаю все карточки из доски и кеширую. фильтрация по условиям — потом
-        let boardCards = await trellos.boardCards(idBoard);
+        let boardCards = trellos.cache.getItem(cardsCacheKey());
+        if (!boardCards) {
+            boardCards = await trellos.boardCards(idBoard);
+            trellos.cache.setItem(cardsCacheKey(), boardCards, Trellos.Search.config.cardsCacheTtl);
+        }
         if (boardCards && boardCards.length) allCards.push(...boardCards);
     };
 

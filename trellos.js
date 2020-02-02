@@ -16,7 +16,6 @@ trellos.config = {
     meCacheTtl: 1000 * 60 * 10,
     cookieName: 'trellosjs2',
     cookieTtl: 60 * 60 * 24 * 365,
-    cardsCacheTtl: 1000 * 60 * 5
 }
 
 
@@ -145,18 +144,13 @@ trellos.me = async (force = false) => {
 }
 
 
-trellos.boardCards = async (idBoard, force = false) => {
-    let cards = trellos.cache.getItem(`board-cards-${idBoard}`);
-    if (cards == null || force) {
-        cards = await trellos.getRecursive(`boards/${idBoard}/cards`, {
-            filter: "all",
-            fields: "id,name,desc,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity,pos",
-            members: "true",
-            members_fields: "id,fullName,username,initials",
-        })
-        trellos.cache.setItem(`board-cards-${idBoard}`, cards, trellos.config.cardsCacheTtl)
-    }
-    return cards;
+trellos.boardCards = async (idBoard) => {
+    return await trellos.getRecursive(`boards/${idBoard}/cards`, {
+        filter: "all",
+        fields: "id,name,desc,idBoard,idList,labels,closed,shortLink,shortUrl,dateLastActivity,pos",
+        members: "true",
+        members_fields: "id,fullName,username,initials",
+    })
 }
 
 

@@ -63,7 +63,7 @@ Trellos.Dash = (props) => {
 
 Trellos.Dash.config = {
     dataCacheTtl: 1000 * 60 * 5,
-    autoUpdateTime: 1000 * 60 * 5
+    autoUpdateTime: 1000 * 60 * 5,
 }
 
 
@@ -332,6 +332,8 @@ Trellos.Dash.Dash = (props) => {
 
 
 Trellos.Dash.data = async (settings, force = false) => {
+    const cardsCacheKey = () => `trellos-dash-board-cards-${settings.idBoard}`;
+
     let data = trellos.cache.getItem('dashboard');
     let boardMembers = trellos.cache.getItem(`dashboard-members-${settings.idBoard}`);
     if (data && boardMembers && !force) return data;
@@ -352,7 +354,12 @@ Trellos.Dash.data = async (settings, force = false) => {
                 || settings.idListsWork.find(idl => idl == list.id)
                 || settings.idListsDone.find(idl => idl == list.id)
         });
-    const cards = await trellos.boardCards(settings.idBoard, force);
+
+    let cards = trellos.cache.getItem(cardsCacheKey());
+    if (!cards || force) {
+        cards = await trellos.boardCards(settings.idBoard, force);
+        trellos.cache.setItem(cardsCacheKey(), cards, Trellos.Dash.config.dataCacheTtl);
+    }
     data.cards = cards.filter(card => {
         try {
             return !card.closed &&
