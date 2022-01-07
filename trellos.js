@@ -357,6 +357,7 @@ const Trellos = (props) => {
                 write: 'true',
                 account: 'true',
             },
+			return_url: window['trello_auth_return_url'],
             expiration: 'never',
             success: () => {
                 trellos.me().then(onLoggedIn);
